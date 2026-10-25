@@ -113,7 +113,8 @@ func TestIdempotentRetries(t *testing.T) {
 	evtID := w.sendMatrix(portal.MXID, aliceMXID, event.EventMessage, &event.MessageEventContent{MsgType: event.MsgText, Body: "once"})
 	w.eventually("message on chatto", func() bool { return len(w.srv.Messages(w.room.ID)) == 1 })
 	// A redelivered Matrix event maps to the same idempotency key.
-	if idempotencyKey(evtID) != idempotencyKey(evtID) || idempotencyKey(evtID) == idempotencyKey("$other") {
+	again := evtID
+	if idempotencyKey(evtID) != idempotencyKey(again) || idempotencyKey(evtID) == idempotencyKey("$other") {
 		t.Fatal("idempotency keys are not deterministic per event")
 	}
 }

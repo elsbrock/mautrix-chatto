@@ -14,7 +14,6 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/emoji"
 	adminv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/admin/v1"
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/admin/v1/adminv1connect"
 	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
@@ -22,6 +21,7 @@ import (
 	discoveryv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/discovery/v1"
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/discovery/v1/discoveryv1connect"
 	realtimev1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/realtime/v1"
+	"github.com/elsbrock/matrix-chatto-bridge/pkg/emoji"
 )
 
 func errNotFound(what string) error {

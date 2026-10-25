@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -29,7 +28,6 @@ type subscription struct {
 	userID string
 	out    chan *realtimev1.RealtimeServerFrame
 	cancel context.CancelFunc
-	once   sync.Once
 }
 
 func (sub *subscription) send(frame *realtimev1.RealtimeServerFrame) {
@@ -161,7 +159,7 @@ func (s *Server) handleRealtime(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.CloseNow()
+	defer func() { _ = conn.CloseNow() }()
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	ctx, readCancel := context.WithTimeout(ctx, 10*time.Second)

@@ -145,15 +145,15 @@ type Server struct {
 
 	idCounter   atomic.Int64
 	cursorFloor int
-	events    []*loggedEvent
-	subs      map[*subscription]struct{}
+	events      []*loggedEvent
+	subs        map[*subscription]struct{}
 }
 
 type upload struct {
 	id, roomID, filename, contentType, sha string
-	size                                  int64
-	data                                  []byte
-	assetID                               string
+	size                                   int64
+	data                                   []byte
+	assetID                                string
 }
 
 // New starts a fake server. Call Close when done.
@@ -181,7 +181,9 @@ func New() *Server {
 	}
 	mux := http.NewServeMux()
 	opts := []connect.HandlerOption{connect.WithInterceptors(&authInterceptor{s: s})}
-	mount := func(path string, h http.Handler) { mux.Handle("/api/connect"+path, http.StripPrefix("/api/connect", h)) }
+	mount := func(path string, h http.Handler) {
+		mux.Handle("/api/connect"+path, http.StripPrefix("/api/connect", h))
+	}
 	mount(discoveryv1connect.NewServerDiscoveryServiceHandler(&discoveryService{s: s}, opts...))
 	mount(apiv1connect.NewViewerServiceHandler(&viewerService{s: s}, opts...))
 	mount(apiv1connect.NewMyAccountServiceHandler(&accountService{s: s}, opts...))

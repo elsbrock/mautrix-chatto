@@ -43,11 +43,17 @@ var (
 )
 
 func portalRoomID(portal *bridgev2.Portal) (string, error) {
-	roomID, groupID := chattoid.ParsePortalID(portal.ID)
-	if groupID != "" || roomID == "" {
+	roomID, ok := chattoRoomID(portal)
+	if !ok {
 		return "", ErrGroupPortal
 	}
 	return roomID, nil
+}
+
+// chattoRoomID returns the Chatto room of a portal; spaces have none.
+func chattoRoomID(portal *bridgev2.Portal) (string, bool) {
+	roomID, groupID := chattoid.ParsePortalID(portal.ID)
+	return roomID, groupID == "" && roomID != ""
 }
 
 func portalMeta(portal *bridgev2.Portal) *chattoid.PortalMetadata {
@@ -233,12 +239,12 @@ func wrapSendError(err error) error {
 	status := bridgev2.WrapErrorInStatus(err).WithErrorAsMessage().WithSendNotice(true)
 	switch cerr.Code() {
 	case connect.CodePermissionDenied:
-		return bridgev2.WrapErrorInStatus(fmt.Errorf("Chatto denied the message: %s", cerr.Message())).
+		return bridgev2.WrapErrorInStatus(fmt.Errorf("chatto denied the message: %s", cerr.Message())).
 			WithErrorAsMessage().WithIsCertain(true).WithSendNotice(true)
 	case connect.CodeInvalidArgument, connect.CodeFailedPrecondition, connect.CodeAlreadyExists:
 		return status.WithIsCertain(true)
 	case connect.CodeResourceExhausted:
-		return bridgev2.WrapErrorInStatus(fmt.Errorf("Chatto rate limit or slow mode: %s", cerr.Message())).
+		return bridgev2.WrapErrorInStatus(fmt.Errorf("chatto rate limit or slow mode: %s", cerr.Message())).
 			WithErrorAsMessage().WithIsCertain(true).WithSendNotice(true)
 	}
 	return err
@@ -350,10 +356,11 @@ func (c *ChattoClient) HandleMatrixReactionRemove(ctx context.Context, msg *brid
 }
 
 func (c *ChattoClient) HandleMatrixReadReceipt(ctx context.Context, receipt *bridgev2.MatrixReadReceipt) error {
-	roomID, err := portalRoomID(receipt.Portal)
-	if err != nil {
+	roomID, ok := chattoRoomID(receipt.Portal)
+	if !ok {
 		return nil
 	}
+	var err error
 	target := receipt.ExactMessage
 	if target != nil && target.ThreadRoot != "" {
 		_, err = c.api.Threads.MarkThreadAsRead(ctx, connect.NewRequest(&apiv1.MarkThreadAsReadRequest{
@@ -378,8 +385,8 @@ const typingRefreshInterval = 2 * time.Second
 const maxTypingDuration = 2 * time.Minute
 
 func (c *ChattoClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.MatrixTyping) error {
-	roomID, err := portalRoomID(msg.Portal)
-	if err != nil {
+	roomID, ok := chattoRoomID(msg.Portal)
+	if !ok {
 		return nil
 	}
 	c.typingLock.Lock()
@@ -414,15 +421,15 @@ func (c *ChattoClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.Mat
 }
 
 func (c *ChattoClient) HandleMatrixRoomName(ctx context.Context, msg *bridgev2.MatrixRoomName) (bool, error) {
-	roomID, err := portalRoomID(msg.Portal)
-	if err != nil || portalMeta(msg.Portal).Kind != portalKindChannel {
+	roomID, ok := chattoRoomID(msg.Portal)
+	if !ok || portalMeta(msg.Portal).Kind != portalKindChannel {
 		return false, nil
 	}
 	name := strings.TrimSpace(msg.Content.Name)
 	if name == "" || len([]rune(name)) > 30 {
-		return false, bridgev2.WrapErrorInStatus(errors.New("Chatto room names must be 1-30 characters")).WithIsCertain(true).WithErrorAsMessage()
+		return false, bridgev2.WrapErrorInStatus(errors.New("chatto room names must be 1-30 characters")).WithIsCertain(true).WithErrorAsMessage()
 	}
-	_, err = c.api.Rooms.UpdateRoom(ctx, connect.NewRequest(&apiv1.UpdateRoomRequest{
+	_, err := c.api.Rooms.UpdateRoom(ctx, connect.NewRequest(&apiv1.UpdateRoomRequest{
 		RoomId:     roomID,
 		Name:       &name,
 		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"name"}},
@@ -434,15 +441,15 @@ func (c *ChattoClient) HandleMatrixRoomName(ctx context.Context, msg *bridgev2.M
 }
 
 func (c *ChattoClient) HandleMatrixRoomTopic(ctx context.Context, msg *bridgev2.MatrixRoomTopic) (bool, error) {
-	roomID, err := portalRoomID(msg.Portal)
-	if err != nil || portalMeta(msg.Portal).Kind != portalKindChannel {
+	roomID, ok := chattoRoomID(msg.Portal)
+	if !ok || portalMeta(msg.Portal).Kind != portalKindChannel {
 		return false, nil
 	}
 	topic := msg.Content.Topic
 	if len([]rune(topic)) > 500 {
-		return false, bridgev2.WrapErrorInStatus(errors.New("Chatto room descriptions are limited to 500 characters")).WithIsCertain(true).WithErrorAsMessage()
+		return false, bridgev2.WrapErrorInStatus(errors.New("chatto room descriptions are limited to 500 characters")).WithIsCertain(true).WithErrorAsMessage()
 	}
-	_, err = c.api.Rooms.UpdateRoom(ctx, connect.NewRequest(&apiv1.UpdateRoomRequest{
+	_, err := c.api.Rooms.UpdateRoom(ctx, connect.NewRequest(&apiv1.UpdateRoomRequest{
 		RoomId:      roomID,
 		Description: &topic,
 		UpdateMask:  &fieldmaskpb.FieldMask{Paths: []string{"description"}},

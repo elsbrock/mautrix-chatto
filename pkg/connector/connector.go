@@ -38,10 +38,10 @@ type Connector struct {
 }
 
 var (
-	_ bridgev2.NetworkConnector         = (*Connector)(nil)
-	_ bridgev2.ConfigValidatingNetwork  = (*Connector)(nil)
-	_ bridgev2.StoppableNetwork         = (*Connector)(nil)
-	_ bridgev2.MaxFileSizeingNetwork    = (*Connector)(nil)
+	_ bridgev2.NetworkConnector            = (*Connector)(nil)
+	_ bridgev2.ConfigValidatingNetwork     = (*Connector)(nil)
+	_ bridgev2.StoppableNetwork            = (*Connector)(nil)
+	_ bridgev2.MaxFileSizeingNetwork       = (*Connector)(nil)
 	_ bridgev2.IdentifierValidatingNetwork = (*Connector)(nil)
 )
 
@@ -183,7 +183,8 @@ func validChattoID(s string, prefix byte) bool {
 	}
 	for i := 1; i < len(s); i++ {
 		ch := s[i]
-		if !(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '_' || ch == '-') {
+		isAlnum := ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9'
+		if !isAlnum && ch != '_' && ch != '-' {
 			return false
 		}
 	}

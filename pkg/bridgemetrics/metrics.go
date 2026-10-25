@@ -4,6 +4,7 @@ package bridgemetrics
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 )
 
 const namespace = "mautrix_chatto"
@@ -110,8 +111,8 @@ var (
 
 func init() {
 	Registry.MustRegister(
-		prometheus.NewGoCollector(),
-		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+		collectors.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		RPCDuration, RPCErrors,
 		RealtimeConnected, RealtimeReconnects, RealtimeRecoveries, RealtimeEvents, RealtimeEventLag,
 		MessagesBridged, BridgeErrors, TokenRefreshes, Logins, ServerInfo, BuildInfo,

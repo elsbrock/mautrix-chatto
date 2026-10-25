@@ -264,7 +264,7 @@ func (r *Realtime) runOnce(ctx context.Context) (connected bool, err error) {
 	if err != nil {
 		return false, fmt.Errorf("chatto realtime: dial: %w", err)
 	}
-	defer conn.CloseNow()
+	defer func() { _ = conn.CloseNow() }()
 	conn.SetReadLimit(r.ReadLimit)
 
 	cursor := r.Cursor()

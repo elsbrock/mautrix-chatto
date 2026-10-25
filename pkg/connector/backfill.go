@@ -18,10 +18,12 @@ import (
 const maxForwardPages = 20
 
 func (c *ChattoClient) FetchMessages(ctx context.Context, params bridgev2.FetchMessagesParams) (*bridgev2.FetchMessagesResponse, error) {
-	roomID, err := portalRoomID(params.Portal)
-	if err != nil {
+	roomID, ok := chattoRoomID(params.Portal)
+	if !ok {
+		// Spaces have no timeline.
 		return &bridgev2.FetchMessagesResponse{HasMore: false}, nil
 	}
+	var err error
 	limit := int32(min(max(params.Count, 1), 500))
 	threadRoot := chattoid.ParseMessageID(params.ThreadRoot)
 	pager := &timelinePager{c: c, roomID: roomID, threadRoot: threadRoot, limit: limit}

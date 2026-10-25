@@ -11,8 +11,8 @@ import (
 	"maunium.net/go/mautrix/bridgev2/matrix"
 	"maunium.net/go/mautrix/event"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/emoji"
 	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
+	"github.com/elsbrock/matrix-chatto-bridge/pkg/emoji"
 )
 
 // presenceSetter is the part of an appservice intent needed to set presence.

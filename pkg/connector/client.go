@@ -37,9 +37,8 @@ type ChattoClient struct {
 	typingLock sync.Mutex
 	typing     map[networkid.PortalID]context.CancelFunc
 
-	cursorLock      sync.Mutex
-	lastCursorSave  time.Time
-	initialSyncDone bool
+	cursorLock     sync.Mutex
+	lastCursorSave time.Time
 }
 
 var (

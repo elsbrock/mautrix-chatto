@@ -14,9 +14,9 @@ import (
 	"maunium.net/go/mautrix/id"
 
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattotest"
 	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
 	realtimev1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/realtime/v1"
+	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattotest"
 )
 
 func TestChattoAttachmentReachesMatrix(t *testing.T) {

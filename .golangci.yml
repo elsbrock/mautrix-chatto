@@ -1,0 +1,35 @@
+version: "2"
+run:
+  build-tags:
+    - goolm
+linters:
+  default: standard
+  enable:
+    - misspell
+    - unconvert
+    - bodyclose
+    - errorlint
+    - nilerr
+  exclusions:
+    generated: strict
+    paths:
+      - pkg/chattopb
+  settings:
+    govet:
+      disable:
+        # The inline analyzer cannot handle generic calls yet.
+        - inline
+    errorlint:
+      # bridgev2.RespError is a comparable-looking struct; errors.As is used.
+      comparison: false
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/elsbrock/matrix-chatto-bridge
+  exclusions:
+    paths:
+      - pkg/chattopb
