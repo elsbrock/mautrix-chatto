@@ -1,0 +1,258 @@
+syntax = "proto3";
+
+package chatto.api.v1;
+
+import "buf/validate/validate.proto";
+import "chatto/api/v1/permissions.proto";
+import "chatto/api/v1/room_invitations.proto";
+import "chatto/api/v1/pagination.proto";
+import "chatto/api/v1/rooms.proto";
+import "google/protobuf/timestamp.proto";
+
+// Viewer-specific state and permission decisions for one room.
+message RoomViewerState {
+  // True when the current user is an effective room member.
+  bool is_member = 1;
+  // True when the room has neutral Badge attention for the current user.
+  // This state is independent of the user's last-read message cursor.
+  bool has_unread = 2;
+  // Effective room-scoped permission decisions after room state constraints.
+  repeated PermissionGrant permissions = 3;
+  // Earliest time the current user may create another root message. Absent when
+  // slow mode is disabled, expired, or bypassed by moderation permissions.
+  google.protobuf.Timestamp slow_mode_next_post_at = 4;
+  // Pending invitation for this viewer; does not grant access to room content.
+  RoomInvitation invitation = 5;
+  // Whether current permissions and room state allow joining without an invitation,
+  // even if already a member. Absent on servers that do not report this decision.
+  optional bool can_rejoin = 6;
+}
+
+// Room kinds to include in directory responses.
+enum RoomDirectoryScope {
+  // Include visible channel rooms and the caller's DM rooms.
+  ROOM_DIRECTORY_SCOPE_UNSPECIFIED = 0;
+  // Include visible channel rooms and the caller's DM rooms.
+  ROOM_DIRECTORY_SCOPE_ALL = 1;
+  // Include visible channel rooms only.
+  ROOM_DIRECTORY_SCOPE_CHANNELS = 2;
+  // Include the caller's DM rooms only.
+  ROOM_DIRECTORY_SCOPE_DMS = 3;
+}
+
+// Archive state to include in room directory responses.
+enum RoomArchiveFilter {
+  // Include active rooms only.
+  ROOM_ARCHIVE_FILTER_UNSPECIFIED = 0;
+  // Include active rooms only.
+  ROOM_ARCHIVE_FILTER_ACTIVE = 1;
+  // Include archived rooms only.
+  ROOM_ARCHIVE_FILTER_ARCHIVED = 2;
+  // Include both active and archived rooms.
+  ROOM_ARCHIVE_FILTER_ALL = 3;
+}
+
+// Room metadata plus state and capabilities resolved for the authenticated
+// viewer.
+message RoomWithViewerState {
+  reserved 2 to 13;
+  reserved "is_member", "has_unread", "can_list_room", "can_join_room", "can_post_message", "can_post_in_thread", "can_attach", "can_react", "can_echo_message", "can_manage_others_message", "can_manage_room", "can_ban_room_members";
+
+  // Public room metadata.
+  Room room = 1;
+  // State and permission decisions resolved for the current user.
+  RoomViewerState viewer_state = 14;
+  // Complete participant user IDs for a DM, including participants whose
+  // accounts were deleted. Clients show those as deleted users. Empty for
+  // channel rooms.
+  repeated string member_user_ids = 15;
+  // Whether this DM has received a root message. Absent for channel rooms.
+  optional bool has_message_history = 16;
+  // Creation time of the latest ordinary DM message, including thread replies.
+  // Edits and retractions do not change this value; historical imports are excluded.
+  // Absent for other room kinds, no ordinary messages, or no message.read permission.
+  // Older servers can omit this field. Absence does not prove inactivity.
+  google.protobuf.Timestamp last_message_at = 17;
+  // Creation time of the latest ordinary DM root message, excluding thread replies.
+  // Uses the same visibility, import, and absence rules as last_message_at.
+  google.protobuf.Timestamp last_root_message_at = 18;
+}
+
+// Sidebar link metadata for room group navigation.
+message SidebarLink {
+  // Stable sidebar link ID.
+  string id = 1;
+  // Display label.
+  string label = 2;
+  // Absolute http(s) URL or server-local path.
+  string url = 3;
+}
+
+// One ordered item in a room group.
+message RoomGroupItem {
+  oneof item {
+    // Visible room entry.
+    RoomWithViewerState room = 1;
+    // Sidebar link entry.
+    SidebarLink sidebar_link = 2;
+  }
+}
+
+// Viewer-specific state for one room group.
+message RoomGroupViewerState {
+  reserved 1;
+  reserved "can_create_room";
+
+  // Effective group-scoped permission decisions after group state constraints.
+  repeated PermissionGrant permissions = 2;
+}
+
+// Ordered group of channel rooms and sidebar links.
+message RoomGroup {
+  reserved 4;
+  reserved "rooms";
+
+  // Stable room group ID.
+  string id = 1;
+  // Display name.
+  string name = 2;
+  // Public group description, when set.
+  string description = 3;
+  // Mixed room/sidebar-link entries in sidebar order.
+  repeated RoomGroupItem items = 5;
+  // State and permissions resolved for the current user.
+  RoomGroupViewerState viewer_state = 6;
+}
+
+// Request for rooms visible to the current user.
+message ListRoomsRequest {
+  // Which room kinds to include. Defaults to all.
+  RoomDirectoryScope scope = 1 [(buf.validate.field).enum.defined_only = true];
+  // Archive state to include. Defaults to ACTIVE. Combined with scope; this
+  // filter does not grant access to hidden rooms.
+  RoomArchiveFilter archive_filter = 2 [(buf.validate.field).enum.defined_only = true];
+  // Defaults to 50 rooms, capped at 100. Rooms are ordered by ID ascending.
+  PageRequest page = 3;
+}
+
+// One live page of rooms visible to the current user. Changes between requests
+// can shift offsets. Follow page.has_more to read the complete directory.
+message ListRoomsResponse {
+  // Visible rooms matching both the room-kind scope and archive filter.
+  repeated RoomWithViewerState rooms = 1;
+  // Count after visibility, scope, and archive filters, before pagination.
+  PageInfo page = 2;
+}
+
+// Request for ordered room groups visible to the current user.
+message ListRoomGroupsRequest {
+  reserved 1;
+  reserved "include_archived_rooms";
+}
+
+// Finite snapshot of ordered room groups visible to the current user.
+message ListRoomGroupsResponse {
+  // Channel room groups in sidebar order.
+  repeated RoomGroup groups = 1;
+}
+
+// Request for one ordered room group visible to the current user.
+message GetRoomGroupRequest {
+  reserved 2;
+  reserved "include_archived_rooms";
+
+  // Required. Room group to resolve.
+  string group_id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+// One ordered room group visible to the current user.
+message GetRoomGroupResponse {
+  // Resolved room group. Hidden and archived room entries are omitted.
+  RoomGroup group = 1;
+}
+
+// Request visible room groups by stable group ID.
+message BatchGetRoomGroupsRequest {
+  reserved 2;
+  reserved "include_archived_rooms";
+
+  // Required room group IDs. Unknown groups are omitted from the response.
+  repeated string group_ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 100
+    items: {
+      string: {min_len: 1}
+    }
+  }];
+}
+
+// Visible room group batch response for direct group hydration.
+message BatchGetRoomGroupsResponse {
+  // Resolved room groups in first-seen request order.
+  repeated RoomGroup groups = 1;
+}
+
+// Request for one room visible to the current user.
+message GetRoomRequest {
+  // Required. Room to resolve.
+  string room_id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+// Room visible to the current user.
+message GetRoomResponse {
+  // Resolved room and viewer state.
+  RoomWithViewerState room = 1;
+}
+
+// Request visible rooms by stable room ID.
+message BatchGetRoomsRequest {
+  // Required room IDs. Unknown rooms and rooms hidden from the caller are
+  // omitted from the response. Archived rooms may be returned when the caller
+  // can still refresh them directly.
+  repeated string room_ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 100
+    items: {
+      string: {min_len: 1}
+    }
+  }];
+}
+
+// Visible room batch response for direct room hydration.
+message BatchGetRoomsResponse {
+  // Resolved rooms in first-seen request order.
+  repeated RoomWithViewerState rooms = 1;
+}
+
+// Reads room directory data.
+service RoomDirectoryService {
+  // Lists rooms visible to the current user. Defaults to active rooms; use
+  // archive_filter to discover archived rooms or include both states. Channel
+  // rooms require membership or room.list. DM membership exposes room and
+  // participant metadata. Message-derived DM state also requires current
+  // read permission. Accessible empty DMs are included. Returns up to 100 rooms
+  // ordered by ID ascending; the default page size is 50.
+  rpc ListRooms(ListRoomsRequest) returns (ListRoomsResponse);
+  // Lists ordered channel room groups and sidebar items visible to the current
+  // user as a finite navigation snapshot. Hidden room entries are omitted.
+  // Archived room entries are omitted.
+  rpc ListRoomGroups(ListRoomGroupsRequest) returns (ListRoomGroupsResponse);
+  // Returns one ordered room group by ID. Hidden room entries are omitted.
+  // Archived room entries are omitted.
+  // Returns NOT_FOUND when the room group does not exist.
+  rpc GetRoomGroup(GetRoomGroupRequest) returns (GetRoomGroupResponse);
+  // Returns ordered room groups for a set of stable group IDs. Hidden room
+  // entries are omitted. Archived room entries are omitted. Unknown groups are
+  // omitted. Results preserve first-seen request order and repeated IDs are
+  // de-duplicated.
+  rpc BatchGetRoomGroups(BatchGetRoomGroupsRequest) returns (BatchGetRoomGroupsResponse);
+  // Returns one visible room by ID. DM rooms require membership. Returns
+  // NOT_FOUND when the room does not exist and PERMISSION_DENIED when the room
+  // exists but is hidden from the caller.
+  rpc GetRoom(GetRoomRequest) returns (GetRoomResponse);
+  // Returns visible rooms for a set of stable room IDs. This is a direct
+  // hydration API, so visible archived rooms may be returned. Unknown rooms and
+  // rooms hidden from the caller are omitted. Results preserve first-seen
+  // request order and repeated IDs are de-duplicated.
+  rpc BatchGetRooms(BatchGetRoomsRequest) returns (BatchGetRoomsResponse);
+}

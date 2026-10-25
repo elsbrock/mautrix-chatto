@@ -1,0 +1,228 @@
+syntax = "proto3";
+
+package chatto.admin.v1;
+
+import "buf/validate/validate.proto";
+import "chatto/api/v1/pagination.proto";
+import "chatto/api/v1/roles.proto";
+import "chatto/api/v1/users.proto";
+import "chatto/admin/v1/roles.proto";
+import "google/protobuf/timestamp.proto";
+
+// User row returned by server-admin member management reads.
+//
+// The embedded user record carries public identity fields; remaining fields are
+// admin/member metadata with visibility controlled by the service.
+message AdminMember {
+  reserved 1 to 4;
+  reserved "id", "login", "display_name", "avatar_url";
+
+  // Explicit role assignments. The implicit everyone role is omitted.
+  repeated string roles = 5;
+  // Account creation time, when known.
+  google.protobuf.Timestamp created_at = 6;
+  reserved 7;
+  reserved "deleted";
+  // Whether the caller may see that the user has a verified email and one exists.
+  bool has_verified_email = 8;
+  // Verified email addresses visible to the caller.
+  repeated string verified_emails = 9;
+  // Whether the caller may delete this account.
+  bool viewer_can_delete_account = 10;
+  // Start of the current username-change cooldown, when visible and known.
+  google.protobuf.Timestamp last_login_change = 11;
+  // Public identity fields for this user.
+  chatto.api.v1.User user = 12;
+  // Selected primary verified email visible to the caller. Absence can mean
+  // that no primary email exists or that the field is not visible.
+  optional string primary_verified_email = 13;
+}
+
+// Request server-admin member IDs.
+// Results use creation time, oldest first. Users without a creation time
+// appear last, ordered by case-insensitive login. User IDs break ties.
+message ListMembersRequest {
+  reserved 2, 3;
+  reserved "limit", "offset";
+
+  // Case-insensitive login/display-name search term. Empty disables search.
+  string search = 1;
+  // Defaults to 20 results when absent or limit is zero. Maximum: 100.
+  chatto.api.v1.PageRequest page = 4;
+}
+
+// Ordered server-admin member IDs. Load rows and role summaries with
+// BatchGetMembers. Advance the offset by the number of IDs, including IDs
+// omitted by a later batch read.
+message ListMembersResponse {
+  reserved 1 to 4;
+  reserved "members", "roles", "total_count", "has_more";
+
+  // Page metadata.
+  chatto.api.v1.PageInfo page = 5;
+  // Matching member IDs in list order.
+  repeated string user_ids = 6;
+}
+
+// Request one server-admin member detail record.
+message GetMemberRequest {
+  oneof target {
+    // Target stable user ID.
+    string user_id = 1 [(buf.validate.field).string.min_len = 1];
+    // Target login identifier.
+    string login = 2 [(buf.validate.field).string.min_len = 1];
+  }
+}
+
+// Server-admin member detail payload.
+message GetMemberResponse {
+  // Member record.
+  AdminMember member = 1;
+  // Roles for assignment UI.
+  repeated AdminRole roles = 2;
+  // Permissions available for per-user overrides.
+  repeated string available_permissions = 3;
+  // Whether the caller may assign/revoke roles.
+  bool viewer_can_assign_roles = 4;
+  // Whether the caller may edit role definitions.
+  bool viewer_can_manage_roles = 5;
+  // Whether the caller may edit direct user permissions.
+  bool viewer_can_manage_user_permissions = 6;
+  // Roles the caller may assign without granting authority the caller does not
+  // possess. Populated when assignment limits are enforced.
+  repeated string assignable_role_names = 7;
+  // Roles the caller may revoke without removing restrictions or authority
+  // beyond the caller's own. Populated when assignment limits are enforced.
+  repeated string revocable_role_names = 8;
+  // True when assignable_role_names and revocable_role_names are authoritative.
+  // Older servers leave this false and clients may retain legacy behaviour.
+  bool role_assignment_limits_enforced = 9;
+}
+
+// Request server-admin member rows for a set of stable user IDs.
+message BatchGetMembersRequest {
+  // Required target user IDs. Unknown IDs are omitted from the response.
+  repeated string user_ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 100
+    items: {
+      string: {min_len: 1}
+    }
+  }];
+}
+
+// Batch server-admin member response.
+message BatchGetMembersResponse {
+  // Found members. The server preserves first-seen request order and
+  // de-duplicates repeated IDs.
+  repeated AdminMember members = 1;
+  // Public roles for display-name lookup.
+  repeated chatto.api.v1.Role roles = 2;
+}
+
+// Request to assign a role to a user.
+message AssignRoleRequest {
+  // Target user ID.
+  string user_id = 1 [(buf.validate.field).string.min_len = 1];
+  // Role name to assign.
+  string role_name = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+// Result of assigning a role.
+message AssignRoleResponse {
+  reserved 1;
+  reserved "assigned";
+
+  // Updated admin member row.
+  AdminMember member = 2;
+}
+
+// Request to revoke a role from a user.
+message RevokeRoleRequest {
+  // Target user ID.
+  string user_id = 1 [(buf.validate.field).string.min_len = 1];
+  // Role name to revoke.
+  string role_name = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+// Result of revoking a role.
+message RevokeRoleResponse {
+  reserved 1;
+  reserved "revoked";
+
+  // Updated admin member row.
+  AdminMember member = 2;
+}
+
+// Request to update a user's password as a server-admin action.
+message ChangeUserPasswordRequest {
+  // Target user ID.
+  string user_id = 1 [(buf.validate.field).string.min_len = 1];
+  // New password. The server applies the same password policy as registration
+  // and password reset.
+  string password = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 128
+  }];
+}
+
+// Result of an admin password update.
+message ChangeUserPasswordResponse {
+  // Updated admin member row.
+  AdminMember member = 1;
+}
+
+// Request to clear a user's self-service username-change cooldown.
+message ClearUsernameCooldownRequest {
+  // Target user ID.
+  string user_id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+// Result of clearing a user's username-change cooldown.
+message ClearUsernameCooldownResponse {
+  reserved 1;
+  reserved "cleared";
+}
+
+// Request to delete a user account as a server-admin action.
+message DeleteUserRequest {
+  reserved 2;
+  reserved "current_password";
+
+  // Target user ID.
+  string user_id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+// Result of deleting a user account.
+message DeleteUserResponse {
+  reserved 1;
+  reserved "deleted";
+}
+
+// Server-admin user management commands and member-detail reads.
+service AdminUserService {
+  // Lists server members for the admin members screen. Requires
+  // admin.view-users.
+  rpc ListMembers(ListMembersRequest) returns (ListMembersResponse);
+  // Gets one server member plus role/permission metadata for admin details.
+  // Requires admin.view-users. Returns NOT_FOUND when the user does not exist.
+  rpc GetMember(GetMemberRequest) returns (GetMemberResponse);
+  // Gets server member rows for multiple users. Requires admin.view-users.
+  rpc BatchGetMembers(BatchGetMembersRequest) returns (BatchGetMembersResponse);
+  // Assigns a role to a user. Requires role.assign, and non-owner callers may
+  // only assign roles whose granted authority they already possess.
+  rpc AssignRole(AssignRoleRequest) returns (AssignRoleResponse);
+  // Revokes a role from a user. Requires role.assign, and non-owner callers may
+  // only revoke roles whose permission decisions are within their authority.
+  rpc RevokeRole(RevokeRoleRequest) returns (RevokeRoleResponse);
+  // Updates another user's password as an admin action. Requires
+  // user.manage-accounts and a fresh credential for the caller; the caller
+  // cannot target their own account.
+  rpc ChangeUserPassword(ChangeUserPasswordRequest) returns (ChangeUserPasswordResponse);
+  // Clears the target user's self-service username-change cooldown. Requires
+  // user.manage-accounts, including when the caller targets their own account.
+  rpc ClearUsernameCooldown(ClearUsernameCooldownRequest) returns (ClearUsernameCooldownResponse);
+  // Deletes a user account as an admin action. Requires user.delete-any for
+  // other users or user.delete-self for the caller.
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
+}

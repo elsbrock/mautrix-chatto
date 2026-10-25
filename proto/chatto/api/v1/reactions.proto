@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package chatto.api.v1;
+
+import "buf/validate/validate.proto";
+import "chatto/api/v1/message_types.proto";
+import "chatto/api/v1/pagination.proto";
+
+// Request to add the current user's reaction to a message.
+//
+// When `message_event_id` names a channel echo of a thread reply, the server
+// treats it as an alias for the original thread reply and stores the reaction
+// on that original event. The server returns `RESOURCE_EXHAUSTED` when the
+// current user already has 20 distinct emoji reactions on the canonical
+// message; adding an emoji that already exists remains an idempotent success.
+message AddReactionRequest {
+  // Required. Room containing the message event.
+  string room_id = 1 [(buf.validate.field).string.min_len = 1];
+  // Required. Event ID of the message being reacted to, or a channel echo of
+  // the message.
+  string message_event_id = 2 [(buf.validate.field).string.min_len = 1];
+  // Required. Emoji shortcode name, such as "thumbsup" or "heart".
+  string emoji = 3 [(buf.validate.field).string.min_len = 1];
+}
+
+// Result of adding a reaction.
+message AddReactionResponse {
+  // True when the reaction was newly added, false when it already existed.
+  bool added = 1;
+  // Updated aggregate reaction state for this emoji.
+  MessageReaction reaction = 2;
+}
+
+// Request to remove the current user's reaction from a message.
+//
+// When `message_event_id` names a channel echo of a thread reply, the server
+// treats it as an alias for the original thread reply and removes the reaction
+// from that original event.
+message RemoveReactionRequest {
+  // Required. Room containing the message event.
+  string room_id = 1 [(buf.validate.field).string.min_len = 1];
+  // Required. Event ID of the message whose reaction should be removed, or a
+  // channel echo of the message.
+  string message_event_id = 2 [(buf.validate.field).string.min_len = 1];
+  // Required. Emoji shortcode name, such as "thumbsup" or "heart".
+  string emoji = 3 [(buf.validate.field).string.min_len = 1];
+}
+
+// Result of removing a reaction.
+message RemoveReactionResponse {
+  // True when the reaction was removed, false when it did not exist.
+  bool removed = 1;
+  // Updated aggregate reaction state for this emoji. Empty when no reactions for
+  // the emoji remain.
+  MessageReaction reaction = 2;
+}
+
+// Request all users with one emoji reaction on a message. Echo IDs resolve to
+// the original message. Users are ordered by user ID ascending.
+message ListReactionUsersRequest {
+  // Room containing the message.
+  string room_id = 1 [(buf.validate.field).string.min_len = 1];
+  // Message or channel echo ID.
+  string message_event_id = 2 [(buf.validate.field).string.min_len = 1];
+  // Emoji shortcode, such as "thumbsup".
+  string emoji = 3 [(buf.validate.field).string.min_len = 1];
+  // Defaults to 50 results. Maximum: 100. Zero uses the default.
+  PageRequest page = 4;
+}
+
+// Complete reaction membership is available by paging this collection.
+message ListReactionUsersResponse {
+  // User IDs in this page. Use UserService.BatchGetUsers for profiles.
+  repeated string user_ids = 1;
+  // Count and continuation for the matching reaction users.
+  PageInfo page = 2;
+}

@@ -1,0 +1,10 @@
+/mautrix-chatto
+/result
+/result-*
+*.db
+*.db-*
+/config.yaml
+/registration.yaml
+/logs/
+/dist/
+coverage.out
