@@ -101,8 +101,12 @@ func TestMatrixMediaReachesChatto(t *testing.T) {
 
 func TestMatrixMediaTooLarge(t *testing.T) {
 	w := newWorld(t)
-	w.srv.MaxUploadSize = 4
 	portal := w.portal(w.room.ID)
+	w.srv.MaxUploadSize = 4
+	// Portal creation already cached the server's default limit.
+	w.conn.uploadLimit.mu.Lock()
+	w.conn.uploadLimit.size = 0
+	w.conn.uploadLimit.mu.Unlock()
 	uri, _, _ := w.mx.BotIntent().UploadMedia(w.ctx, "", []byte("too large"), "big.bin", "application/octet-stream")
 	w.sendMatrix(portal.MXID, aliceMXID, event.EventMessage, &event.MessageEventContent{
 		MsgType: event.MsgFile, Body: "big.bin", FileName: "big.bin", URL: uri,
@@ -178,9 +182,10 @@ func TestDMPortal(t *testing.T) {
 	dm := h.srv.AddDM(alice.ID, bob.ID)
 	h.login(aliceMXID, "alice", "pw")
 	portal := h.portal(dm.ID)
-	if portal.RoomType != database.RoomTypeDM || portal.OtherUserID != chattoid.MakeUserID(bob.ID) {
-		t.Fatalf("DM portal type=%q other=%q", portal.RoomType, portal.OtherUserID)
-	}
+	h.eventually("DM portal metadata", func() bool {
+		p, _ := h.br.DB.Portal.GetByKey(h.ctx, chattoid.MakePortalKey(dm.ID))
+		return p.RoomType == database.RoomTypeDM && p.OtherUserID == chattoid.MakeUserID(bob.ID)
+	})
 	h.srv.PostMessage(bob.ID, dm.ID, "psst")
 	h.waitMessage(portal.MXID, "psst")
 }
@@ -192,10 +197,11 @@ func TestGroupDMPortal(t *testing.T) {
 	carol := h.srv.AddUser("carol", "Carol", "pw")
 	dm := h.srv.AddDM(alice.ID, bob.ID, carol.ID)
 	h.login(aliceMXID, "alice", "pw")
-	portal := h.portal(dm.ID)
-	if portal.RoomType != database.RoomTypeGroupDM {
-		t.Fatalf("group DM portal type %q", portal.RoomType)
-	}
+	h.portal(dm.ID)
+	h.eventually("group DM portal type", func() bool {
+		p, _ := h.br.DB.Portal.GetByKey(h.ctx, chattoid.MakePortalKey(dm.ID))
+		return p.RoomType == database.RoomTypeGroupDM
+	})
 }
 
 func TestRoomGroupBecomesSpace(t *testing.T) {
@@ -206,9 +212,10 @@ func TestRoomGroupBecomesSpace(t *testing.T) {
 	h.login(aliceMXID, "alice", "pw")
 	portal := h.portal(room.ID)
 	space := h.portalByID(chattoidGroupKey(group.ID))
-	if space.RoomType != database.RoomTypeSpace || space.Name != "Engineering" {
-		t.Fatalf("space portal %q %q", space.RoomType, space.Name)
-	}
+	h.eventually("space portal metadata", func() bool {
+		p, _ := h.br.DB.Portal.GetByKey(h.ctx, chattoidGroupKey(group.ID))
+		return p.RoomType == database.RoomTypeSpace && p.Name == "Engineering"
+	})
 	h.eventually("space child", func() bool {
 		return len(h.mx.Events(func(e *sentEvent) bool {
 			return e.Type == event.StateSpaceChild && e.RoomID == space.MXID && e.StateKey != nil && *e.StateKey == string(portal.MXID)

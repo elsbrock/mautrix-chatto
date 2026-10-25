@@ -29,13 +29,13 @@ const typingTimeout = 6 * time.Second
 func (c *ChattoClient) HandleState(state chattoclient.RealtimeState, err error) {
 	switch state {
 	case chattoclient.RealtimeConnected:
-		c.UserLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
+		c.sendState(status.BridgeState{StateEvent: status.StateConnected})
 	case chattoclient.RealtimeTransientDisconnect:
 		msg := "Lost connection to Chatto"
 		if err != nil {
 			msg = fmt.Sprintf("Lost connection to Chatto: %v", err)
 		}
-		c.UserLogin.BridgeState.Send(status.BridgeState{
+		c.sendState(status.BridgeState{
 			StateEvent: status.StateTransientDisconnect,
 			Error:      "chatto-realtime-disconnected",
 			Message:    msg,

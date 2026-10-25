@@ -91,6 +91,13 @@
             '';
             installPhase = "touch $out";
           });
+          alerts =
+            pkgs.runCommand "alert-rules-check"
+              { nativeBuildInputs = [ (pkgs.prometheus.cli or pkgs.prometheus) ]; }
+              ''
+                promtool check rules ${./deploy/monitoring/alerts.yaml}
+                touch $out
+              '';
           nixfmt = pkgs.runCommand "nixfmt-check" { nativeBuildInputs = [ pkgs.nixfmt ]; } ''
             nixfmt --check ${./flake.nix} ${./nix/package.nix} ${./nix/module.nix}
             touch $out

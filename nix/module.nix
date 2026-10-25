@@ -138,6 +138,13 @@ in
       };
     };
 
+    alertRules = lib.mkOption {
+      type = lib.types.bool;
+      default = cfg.metrics.addScrapeConfig;
+      defaultText = lib.literalExpression "config.services.mautrix-chatto.metrics.addScrapeConfig";
+      description = "Whether to add the bridge's alerting rules to the local Prometheus.";
+    };
+
     serviceDependencies = lib.mkOption {
       type = with lib.types; listOf str;
       default =
@@ -213,6 +220,8 @@ in
         ];
       }
     ];
+
+    services.prometheus.ruleFiles = lib.mkIf cfg.alertRules [ ../deploy/monitoring/alerts.yaml ];
 
     systemd.services.mautrix-chatto = {
       description = "mautrix-chatto, a Matrix-Chatto puppeting bridge";

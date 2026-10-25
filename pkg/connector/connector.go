@@ -14,6 +14,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/commands"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/bridgev2/status"
 
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/bridgemetrics"
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
@@ -32,9 +33,37 @@ type Connector struct {
 
 	serverVersion string
 	metricsServer *http.Server
+	uploadLimit   uploadLimit
 
 	readyLock sync.RWMutex
 	ready     bool
+
+	loginStatesLock sync.Mutex
+	loginStates     map[networkid.UserLoginID]status.BridgeStateEvent
+}
+
+// recordLoginState updates the per-state login gauge.
+func (c *Connector) recordLoginState(id networkid.UserLoginID, state status.BridgeStateEvent) {
+	c.loginStatesLock.Lock()
+	defer c.loginStatesLock.Unlock()
+	if c.loginStates == nil {
+		c.loginStates = make(map[networkid.UserLoginID]status.BridgeStateEvent)
+	}
+	if state == "" {
+		delete(c.loginStates, id)
+	} else {
+		c.loginStates[id] = state
+	}
+	counts := make(map[status.BridgeStateEvent]int)
+	for _, s := range c.loginStates {
+		counts[s]++
+	}
+	for _, s := range []status.BridgeStateEvent{
+		status.StateConnecting, status.StateConnected, status.StateTransientDisconnect,
+		status.StateBadCredentials, status.StateUnknownError, status.StateLoggedOut,
+	} {
+		bridgemetrics.Logins.WithLabelValues(string(s)).Set(float64(counts[s]))
+	}
 }
 
 var (

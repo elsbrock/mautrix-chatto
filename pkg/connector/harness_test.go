@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -46,12 +45,16 @@ func withBackfill(n int) harnessOpt {
 	}
 }
 
+var harnessCounter int
+
 func newHarness(t *testing.T, opts ...harnessOpt) *harness {
 	t.Helper()
 	srv := chattotest.New()
 	t.Cleanup(srv.Close)
 
-	raw, err := sql.Open("sqlite3", "file:"+filepath.Join(t.TempDir(), "bridge.db")+"?_foreign_keys=on&_busy_timeout=5000&_txlock=immediate")
+	harnessCounter++
+	dsn := fmt.Sprintf("file:harness%d?mode=memory&cache=shared&_foreign_keys=on&_busy_timeout=5000&_txlock=immediate", harnessCounter)
+	raw, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		t.Fatal(err)
 	}

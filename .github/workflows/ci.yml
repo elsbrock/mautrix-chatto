@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.15.0
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Check generated code is up to date
+        run: |
+          go install github.com/bufbuild/buf/cmd/buf@v1.75.0
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+          go install connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.21.1
+          buf generate
+          git diff --exit-code -- pkg/chattopb
+      - name: Test
+        run: go test -race -tags goolm -count=1 ./...
+      - name: Fuzz format converters
+        run: |
+          go test -tags goolm ./pkg/chattofmt -run '^$' -fuzz FuzzToMatrix -fuzztime 30s
+          go test -tags goolm ./pkg/chattofmt -run '^$' -fuzz FuzzFromMatrix -fuzztime 30s
+      - name: Build
+        run: go build -tags goolm -o mautrix-chatto ./cmd/mautrix-chatto
+
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
+      - run: nix flake check -L
+      - run: nix build -L .#mautrix-chatto

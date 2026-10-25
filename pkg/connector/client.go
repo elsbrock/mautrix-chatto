@@ -99,14 +99,14 @@ func (c *ChattoClient) persistSession(ctx context.Context, sess chattoclient.Ses
 func (c *ChattoClient) Connect(ctx context.Context) {
 	log := zerolog.Ctx(ctx)
 	if c.api == nil {
-		c.UserLogin.BridgeState.Send(status.BridgeState{
+		c.sendState(status.BridgeState{
 			StateEvent: status.StateBadCredentials,
 			Error:      "chatto-no-credentials",
 			Message:    "No Chatto credentials stored, please log in again",
 		})
 		return
 	}
-	c.UserLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnecting})
+	c.sendState(status.BridgeState{StateEvent: status.StateConnecting})
 	if c.users == nil {
 		c.users = newUserCache(c.api)
 	}
@@ -149,7 +149,7 @@ func (c *ChattoClient) Connect(ctx context.Context) {
 
 func (c *ChattoClient) badCredentials(ctx context.Context, err error) {
 	zerolog.Ctx(ctx).Warn().Err(err).Msg("Chatto rejected the login credentials")
-	c.UserLogin.BridgeState.Send(status.BridgeState{
+	c.sendState(status.BridgeState{
 		StateEvent: status.StateBadCredentials,
 		Error:      "chatto-invalid-auth",
 		Message:    "Chatto signed this login out, please log in again",
@@ -208,6 +208,7 @@ func (c *ChattoClient) LogoutRemote(ctx context.Context) {
 	meta.Session = nil
 	meta.BotKey = ""
 	meta.RealtimeCursor = ""
+	c.Main.recordLoginState(c.UserLogin.ID, "")
 	c.api = nil
 	c.tokens = nil
 }
@@ -235,4 +236,10 @@ func isAuthError(err error) bool {
 	}
 	code := connect.CodeOf(err)
 	return code == connect.CodeUnauthenticated
+}
+
+// sendState reports a bridge state and records it in the login gauge.
+func (c *ChattoClient) sendState(state status.BridgeState) {
+	c.Main.recordLoginState(c.UserLogin.ID, state.StateEvent)
+	c.UserLogin.BridgeState.Send(state)
 }

@@ -22,19 +22,17 @@ import (
 // defaultChunkSize is used when the server does not announce max_chunk_size.
 const defaultChunkSize = 4 << 20
 
+// uploadLimit caches the server's upload limit. It lives on the Connector
+// because one bridge serves one Chatto server.
 type uploadLimit struct {
 	mu      sync.Mutex
 	size    int64
 	fetched time.Time
 }
 
-var uploadLimits sync.Map // server URL → *uploadLimit
-
 // maxUploadSize returns Chatto's upload limit, cached for an hour.
 func (c *ChattoClient) maxUploadSize(ctx context.Context) int64 {
-	key := c.api.BaseURL().String()
-	v, _ := uploadLimits.LoadOrStore(key, &uploadLimit{})
-	limit := v.(*uploadLimit)
+	limit := &c.Main.uploadLimit
 	limit.mu.Lock()
 	defer limit.mu.Unlock()
 	if limit.size > 0 && time.Since(limit.fetched) < time.Hour {
