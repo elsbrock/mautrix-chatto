@@ -75,3 +75,35 @@ describe the older 0.4 line and are partly out of date (e.g. realtime v1).
   `call_started/ended` in the timeline.
 - Bots cannot be invited to rooms. They are added with `RoomService.AddMember` by the owner,
   or join via `JoinRoom` with room.join.
+
+## Auth
+
+- Password login: `POST /auth/login` JSON `{"login","password"}`, sent without the
+  `X-Chatto-Authentication-Mode: cookie` header, returns
+  `{token, refreshToken, expiresIn, refreshTokenExpiresIn, user{id,login}}`. No 2FA.
+  It can be disabled server-side (`auth.direct_login=false` gives 403).
+- Access tokens (`cht_AT…`) last 15 min by default; the refresh window is 90 days and slides.
+- Refresh: `POST /oauth/token` JSON `{"grant_type":"refresh_token","refresh_token",
+  "refresh_request_id":"<uuid>"}` (no client_id for password sessions) returns snake_case
+  `{access_token, expires_in, refresh_token, refresh_token_expires_in}`. **Refresh
+  tokens are one-time-use; presenting a stale one revokes the session.** Reusing the
+  same request ID with the previous token replays a lost response.
+- Logout: `POST /auth/logout` with the bearer token and `{"refreshToken"}`.
+- OAuth: authorization code with PKCE S256, public clients only. `client_id` is a client
+  metadata document URL (CIMD) that the server fetches; there's no registration. Redirects are HTTPS, or loopback for native clients.
+- Bot API keys `cht_BK_…` never expire. Send them as `Authorization: Bearer`, and as
+  `bearer_token` in the realtime subscribe frame.
+- No Origin, Cookie or CSRF headers are needed for non-browser clients.
+- Server version: `ServerDiscoveryService.GetServer().profile.version` (also `GET /.well-known/chatto`).
+
+## Bots and permissions
+
+- `BotService` (human tokens only): CreateBot{login, display_name} returns a one-time api_key.
+  The owner can rename the bot, set its avatar (UserService), add it to rooms (`RoomService.AddMember`) and
+  grant it permissions. Bots get **no baseline permissions**; grants are an allowlist capped
+  at the owner's own permissions. Bots cannot StartDM, cannot be invited and cannot get roles.
+- `AdminPermissionService.SetUserPermission{user_id, permission, decision, scope{kind,id}}`.
+  Permissions a bridge bot needs: `message.read`, `message.post`, `message.post-in-thread`,
+  `message.attach`, `message.react`, `message.echo`, `room.list`, `room.join`.
+- No admin RPC creates human accounts. The Operator API (local unix socket, unauthenticated,
+  disabled by default) can, and can import historical messages as anyone, but it has no live posting.
