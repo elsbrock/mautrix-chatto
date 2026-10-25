@@ -1,0 +1,7 @@
+# Vendored from github.com/chattocorp/chatto (proto/), Apache-2.0.
+# Refresh with scripts/sync-proto.sh; do not edit the .proto files by hand.
+version: v2
+modules:
+  - path: .
+deps:
+  - buf.build/bufbuild/protovalidate

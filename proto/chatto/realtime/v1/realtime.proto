@@ -1,0 +1,216 @@
+syntax = "proto3";
+
+package chatto.realtime.v1;
+
+import "chatto/api/v1/member_directory.proto";
+import "chatto/api/v1/room_directory.proto";
+import "chatto/api/v1/server.proto";
+import "chatto/api/v1/voice_calls.proto";
+import "chatto/realtime/v1/events.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+// Starts one authorized public realtime subscription.
+//
+// The client sends this message as the first binary WebSocket message. The
+// client does not send more application messages on the socket.
+message RealtimeSubscribe {
+  // Behavioral protocol version requested by the client. The only supported
+  // version is 4.
+  uint32 protocol_version = 1;
+  // Optional bearer token. When present, it takes precedence over cookie auth.
+  optional string bearer_token = 2;
+  // Opaque cursor from a previously received replayable event or `caught_up`
+  // frame. A usable cursor receives bounded authorized events after
+  // that position. Cursors expire 15 minutes after issue.
+  optional string resume_cursor = 3;
+  // Required fallback when the cursor is absent or cannot resume safely.
+  RealtimeInitialState initial_state = 4;
+}
+
+// Server-to-client frame for Chatto's protobuf WebSocket realtime protocol.
+message RealtimeServerFrame {
+  oneof frame {
+    // One authorized public event copy.
+    RealtimeEvent event = 1;
+    // Application-level heartbeat used for liveness checks.
+    RealtimeHeartbeat heartbeat = 2;
+    // Server-requested close with reconnect guidance.
+    RealtimeClose close = 3;
+    // Confirms that recovery reached the live-stream boundary.
+    RealtimeCaughtUp caught_up = 4;
+    // One exact authorized server-content snapshot.
+    RealtimeSnapshot snapshot = 5;
+  }
+}
+
+// Startup behavior when a subscription cannot resume from its cursor.
+enum RealtimeInitialState {
+  // Invalid value. The server rejects subscriptions that use it.
+  REALTIME_INITIAL_STATE_UNSPECIFIED = 0;
+  // Start at the current event boundary without sending current resources.
+  REALTIME_INITIAL_STATE_LIVE_ONLY = 1;
+  // Send an exact authorized snapshot before later public events.
+  REALTIME_INITIAL_STATE_SNAPSHOT = 2;
+}
+
+// One authorized snapshot of the current bounded server content.
+//
+// The server sends at most one snapshot before `caught_up`. The client must
+// discard the snapshot if the socket closes before `caught_up`. List values
+// replace the complete local family.
+// Large and paginated resources, such as message history, are not part of the
+// snapshot and remain available through ConnectRPC.
+message RealtimeSnapshot {
+  // Current public server profile.
+  chatto.api.v1.ServerPublicProfile server = 1;
+  // All rooms visible to the caller at the snapshot boundary.
+  repeated chatto.api.v1.RoomWithViewerState rooms = 2;
+  // All room groups visible to the caller at the snapshot boundary.
+  repeated chatto.api.v1.RoomGroup room_groups = 3;
+  // The viewer and public users referenced by another snapshot family.
+  repeated chatto.api.v1.DirectoryMember users = 4;
+  // All active calls visible to the caller at the snapshot boundary.
+  repeated chatto.api.v1.ActiveCall active_calls = 5;
+}
+
+// Confirms that recovery is complete and live delivery has begun.
+//
+// Clients can retain `cursor` after they apply every preceding event.
+message RealtimeCaughtUp {
+  // Opaque cursor at the recovery-to-live handoff boundary.
+  string cursor = 1;
+  // Actual recovery result, including a successful replay with no events.
+  RealtimeRecovery recovery = 2;
+}
+
+// How the server reached the live-delivery boundary.
+enum RealtimeRecovery {
+  // Invalid value. The server always supplies a recovery result.
+  REALTIME_RECOVERY_UNSPECIFIED = 0;
+  // The requested cursor was accepted and all available authorized events followed it.
+  REALTIME_RECOVERY_RESUMED = 1;
+  // The server sent a replacement snapshot.
+  REALTIME_RECOVERY_SNAPSHOT = 2;
+  // The server started at the current boundary without past events or resources.
+  REALTIME_RECOVERY_LIVE_ONLY = 3;
+}
+
+// One authorized public event with its optional cursor.
+//
+// Each payload uses a realtime-owned public message. The union is the public
+// event catalogue. An internal event that is absent from this union is not
+// part of the realtime API. The server creates a fresh caller-specific value
+// after authorization. An event has a resume cursor when it can be replayed.
+// An event without a cursor is safe to miss, or its state can be restored from
+// a snapshot or a ConnectRPC resource.
+message RealtimeEvent {
+  // Universal event identifier (NanoID).
+  string id = 1;
+  // Time when the source event was created.
+  google.protobuf.Timestamp created_at = 2;
+  // ID of the user that caused the event. Absence means no user actor.
+  optional string actor_id = 3;
+  // Opaque cursor safe to retain after this complete event is accepted.
+  optional string cursor = 4;
+
+  reserved 35 to 45;
+  reserved "room_group_created", "room_group_updated", "room_group_deleted", "room_added_to_group", "room_removed_from_group", "rooms_in_group_reordered", "sidebar_link_added_to_group", "sidebar_link_updated", "sidebar_link_removed_from_group", "sidebar_group_entries_reordered", "room_groups_reordered";
+
+  // Authorized semantic payload.
+  oneof event {
+    RoomCreatedEvent room_created = 10;
+    RoomUpdatedEvent room_updated = 11;
+    RoomDeletedEvent room_deleted = 12;
+    RoomArchivedEvent room_archived = 13;
+    RoomUnarchivedEvent room_unarchived = 14;
+    RoomUniversalChangedEvent room_universal_changed = 15;
+    RoomSlowModeChangedEvent room_slow_mode_changed = 16;
+    RoomThreadingModeChangedEvent room_threading_mode_changed = 17;
+    UserJoinedRoomEvent user_joined_room = 18;
+    UserLeftRoomEvent user_left_room = 19;
+    VoiceCallParticipantJoinedEvent voice_call_participant_joined = 20;
+    VoiceCallParticipantLeftEvent voice_call_participant_left = 21;
+    VoiceCallStartedEvent voice_call_started = 22;
+    VoiceCallEndedEvent voice_call_ended = 23;
+    MessagePostedEvent message_posted = 24;
+    MessageEditedEvent message_edited = 25;
+    MessageRetractedEvent message_retracted = 26;
+    MessagePinnedEvent message_pinned = 27;
+    MessageUnpinnedEvent message_unpinned = 28;
+    ThreadCreatedEvent thread_created = 29;
+    AssetProcessingStartedEvent asset_processing_started = 30;
+    AssetProcessingSucceededEvent asset_processing_succeeded = 31;
+    AssetProcessingFailedEvent asset_processing_failed = 32;
+    AssetDeletedEvent asset_deleted = 33;
+    ServerMotdChangedEvent server_motd_changed = 34;
+    UserAccountCreatedEvent user_account_created = 46;
+    UserProfileChangedEvent user_profile_changed = 47;
+    UserAccountDeletedEvent user_account_deleted = 48;
+    ReactionAddedEvent reaction_added = 49;
+    ReactionRemovedEvent reaction_removed = 50;
+    ViewerPreferencesChangedEvent viewer_preferences_changed = 51;
+    ThreadViewerStateChangedEvent thread_viewer_state_changed = 52;
+    ServerProfileChangedEvent server_profile_changed = 53;
+    UserTypingEvent user_typing = 54;
+    PresenceChangedEvent presence_changed = 55;
+    NotificationOccurrencesChangedEvent notification_occurrences_changed = 56;
+    NotificationUnreadStateChangedEvent notification_unread_state_changed = 57;
+    RoomReadStateChangedEvent room_read_state_changed = 58;
+    RoomLayoutChangedEvent room_layout_changed = 59;
+    RoleCreatedEvent role_created = 60;
+    RoleUpdatedEvent role_updated = 61;
+    RoleDeletedEvent role_deleted = 62;
+    RolesReorderedEvent roles_reordered = 63;
+    RoleAssignedEvent role_assigned = 64;
+    RoleRevokedEvent role_revoked = 65;
+    RolePermissionsChangedEvent role_permissions_changed = 66;
+    ViewerPermissionsChangedEvent viewer_permissions_changed = 67;
+    ViewerPresencePreferenceChangedEvent viewer_presence_preference_changed = 68;
+    RoomInvitationCreatedEvent room_invitation_created = 69;
+    RoomInvitationAcceptedEvent room_invitation_accepted = 70;
+    RoomInvitationDeclinedEvent room_invitation_declined = 71;
+  }
+}
+
+// Application-level heartbeat.
+message RealtimeHeartbeat {
+  // Fresh resume cursor for the latest replay boundary delivered on this
+  // socket. A client can retain it only after all earlier frames have been
+  // applied.
+  optional string cursor = 1;
+}
+
+// Stable server-requested close category.
+enum RealtimeCloseCode {
+  // Invalid or unknown close code.
+  REALTIME_CLOSE_CODE_UNSPECIFIED = 0;
+  // The subscription message is malformed or contains an invalid value.
+  REALTIME_CLOSE_CODE_INVALID_REQUEST = 1;
+  // The requested behavioral protocol version is not supported.
+  REALTIME_CLOSE_CODE_UNSUPPORTED_PROTOCOL = 2;
+  // The server cannot accept or continue a realtime session at present.
+  REALTIME_CLOSE_CODE_TEMPORARILY_UNAVAILABLE = 3;
+  // The caller is no longer authenticated.
+  REALTIME_CLOSE_CODE_AUTHENTICATION_REQUIRED = 4;
+  // The caller must renew its session before reconnecting.
+  REALTIME_CLOSE_CODE_SESSION_RENEWAL_REQUIRED = 5;
+  // The client must discard its cursor and synchronize current state again.
+  REALTIME_CLOSE_CODE_RESYNC_REQUIRED = 6;
+  // The user's session ended and the client must return to sign-in.
+  REALTIME_CLOSE_CODE_SESSION_TERMINATED = 7;
+  // Privileged mode expired. Reconnect and refresh effective viewer and room permissions.
+  REALTIME_CLOSE_CODE_PRIVILEGED_MODE_EXPIRED = 8;
+}
+
+// Close instruction sent before the socket closes when possible.
+message RealtimeClose {
+  // Stable machine-readable close code.
+  RealtimeCloseCode code = 1;
+  // Safe human-readable close message.
+  string message = 2;
+  // Whether the client should reconnect automatically.
+  bool reconnect = 3;
+  // Suggested delay before reconnect.
+  google.protobuf.Duration retry_after = 4;
+}

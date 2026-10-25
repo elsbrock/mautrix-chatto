@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package chatto.api.v1;
+
+import "buf/validate/validate.proto";
+
+// Offset-based page request for list RPCs whose result order is stable enough
+// for simple list browsing. Pages are live reads, not a fixed snapshot. Changes
+// between requests can shift offsets.
+message PageRequest {
+  // Maximum number of items to request. Each RPC defines its default and
+  // effective maximum. Valid values above that maximum are capped. This shared
+  // shape rejects values above 500 or below zero. Zero uses the RPC default.
+  int32 limit = 1 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 500
+  }];
+  // Zero-based number of matching items to skip.
+  int32 offset = 2 [(buf.validate.field).int32.gte = 0];
+}
+
+// Offset-based page metadata returned by list RPCs.
+message PageInfo {
+  // Total matching item count before pagination.
+  int64 total_count = 1;
+  // True when another page exists after this response.
+  bool has_more = 2;
+}
