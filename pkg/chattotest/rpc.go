@@ -908,3 +908,16 @@ func (a *adminPermissionService) SetUserPermission(ctx context.Context, req *con
 	})
 	return connect.NewResponse(&adminv1.SetUserPermissionResponse{}), nil
 }
+
+// PermissionsFor returns the SetUserPermission calls made for a user.
+func (s *Server) PermissionsFor(userID string) []Permission {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []Permission
+	for _, p := range s.Permissions {
+		if p.UserID == userID {
+			out = append(out, p)
+		}
+	}
+	return out
+}

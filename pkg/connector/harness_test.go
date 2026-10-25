@@ -205,8 +205,15 @@ func (h *harness) sendMatrix(roomID id.RoomID, sender id.UserID, evtType event.T
 		Timestamp: time.Now().UnixMilli(),
 		Content:   event.Content{Parsed: content},
 	}
-	if evtType.Class == event.UnknownEventType {
+	switch evtType.Class {
+	case event.UnknownEventType:
 		evt.Type.Class = event.MessageEventType
+	case event.EphemeralEventType:
+		evt.Mautrix.EventSource = event.SourceEphemeral
+		evt.Sender = ""
+	case event.StateEventType:
+		empty := ""
+		evt.StateKey = &empty
 	}
 	h.br.QueueMatrixEvent(h.ctx, evt)
 	return evtID
