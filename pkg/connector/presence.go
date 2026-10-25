@@ -50,13 +50,17 @@ func statusMessage(status apiv1.PresenceStatus, custom *apiv1.CustomUserStatus, 
 }
 
 func (c *ChattoClient) setGhostPresence(ctx context.Context, ghost *bridgev2.Ghost, status apiv1.PresenceStatus, custom *apiv1.CustomUserStatus) {
-	asIntent, ok := ghost.Intent.(*matrix.ASIntent)
-	if !ok {
-		return
-	}
-	var setter presenceSetter = asIntent.Matrix
-	if err := asIntent.Matrix.EnsureRegistered(ctx); err != nil {
-		zerolog.Ctx(ctx).Debug().Err(err).Msg("Failed to register ghost for presence")
+	var setter presenceSetter
+	switch intent := ghost.Intent.(type) {
+	case *matrix.ASIntent:
+		if err := intent.Matrix.EnsureRegistered(ctx); err != nil {
+			zerolog.Ctx(ctx).Debug().Err(err).Msg("Failed to register ghost for presence")
+			return
+		}
+		setter = intent.Matrix
+	case presenceSetter:
+		setter = intent
+	default:
 		return
 	}
 	err := setter.SetPresence(ctx, mautrix.ReqPresence{
