@@ -1,0 +1,48 @@
+package chattoid
+
+import (
+	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
+)
+
+// CredentialKind says how a login authenticates.
+type CredentialKind string
+
+const (
+	CredentialSession CredentialKind = "session"
+	CredentialBotKey  CredentialKind = "bot_key"
+)
+
+// UserLoginMetadata is stored with each login.
+type UserLoginMetadata struct {
+	Kind    CredentialKind        `json:"kind"`
+	Session *chattoclient.Session `json:"session,omitempty"`
+	BotKey  string                `json:"bot_key,omitempty"`
+	Login   string                `json:"login"`
+	IsBot   bool                  `json:"is_bot,omitempty"`
+	// RealtimeCursor is the last safe realtime resume cursor. Cursors expire
+	// after 15 minutes, so it only helps across quick restarts.
+	RealtimeCursor string `json:"realtime_cursor,omitempty"`
+}
+
+// GhostMetadata is stored with each ghost.
+type GhostMetadata struct {
+	Login string `json:"login,omitempty"`
+	IsBot bool   `json:"is_bot,omitempty"`
+}
+
+// PortalMetadata is stored with each portal.
+type PortalMetadata struct {
+	Kind          string `json:"kind,omitempty"` // channel, dm, group
+	ThreadingMode int32  `json:"threading_mode,omitempty"`
+	Universal     bool   `json:"universal,omitempty"`
+	Archived      bool   `json:"archived,omitempty"`
+}
+
+// MessageMetadata is stored with each bridged message part.
+type MessageMetadata struct {
+	// AssetID is set for attachment parts.
+	AssetID string `json:"asset_id,omitempty"`
+	// Processing is true while Chatto was still processing the asset when
+	// the part was bridged, so a later success event triggers an edit.
+	Processing bool `json:"processing,omitempty"`
+}

@@ -1,0 +1,52 @@
+# Base URL of the Chatto server, e.g. https://chat.example.com.
+# One bridge instance serves exactly one Chatto server.
+server_url: https://chat.example.com
+
+# Displayname template for Chatto users.
+# {{.DisplayName}} - the display name set on Chatto (may be empty)
+# {{.Login}}       - the Chatto username
+# {{.ID}}          - the Chatto user ID
+# {{.IsBot}}       - true for bot accounts
+displayname_template: '{{or .DisplayName .Login}}{{if .IsBot}} (bot){{end}}'
+
+# Should Chatto presence (online, away, do not disturb, offline) and custom
+# statuses be mirrored onto ghost users? Requires presence on the homeserver.
+sync_presence: true
+
+# Should the bridge keep logged-in Chatto accounts marked as online while the
+# bridge runs? Chatto shows users as offline unless a client refreshes their
+# presence every 30 seconds. Bot logins are never kept online.
+keep_logins_online: false
+
+# Should voice call start and end on Chatto be posted as notices in the room?
+call_notices: true
+
+# How thread replies that Chatto also echoes into the main channel are handled.
+# "skip" bridges only the thread reply. "notice" additionally posts a short
+# notice in the main timeline linking to the thread reply.
+thread_echo: skip
+
+# Allow logging in with a Chatto username and password. Disable this if the
+# bridge should only accept bot API keys or tokens.
+allow_password_login: true
+
+# Refuse to connect to Chatto servers older than the protos this bridge was
+# built against. When false, a mismatch is only logged.
+strict_server_version: false
+
+# Prometheus metrics and health endpoints (/metrics, /healthz, /readyz).
+metrics:
+    enabled: false
+    listen: 127.0.0.1:8001
+
+# Optional ghost accounts on the Chatto side. When enabled, a Matrix user with
+# no Chatto login who speaks in a bridged room gets a dedicated Chatto bot
+# account (owned by the room's relay login) instead of having their messages
+# relayed with a name prefix. The relay login must be a human account with
+# the bot.create permission.
+ghost_bots:
+    enabled: false
+    # Login prefix for created bot accounts. Chatto logins are 2-32 characters.
+    login_prefix: mx-
+    # Displayname template for created bots. {{.DisplayName}} and {{.UserID}}.
+    displayname_template: '{{.DisplayName}}'
