@@ -143,7 +143,9 @@ in
       default =
         (lib.optional config.services.matrix-synapse.enable config.services.matrix-synapse.serviceUnit)
         ++ (lib.optional config.services.matrix-conduit.enable "conduit.service")
-        ++ (lib.optional (config.services ? matrix-tuwunel && config.services.matrix-tuwunel.enable) "tuwunel.service");
+        ++ (lib.optional (
+          config.services ? matrix-tuwunel && config.services.matrix-tuwunel.enable
+        ) "tuwunel.service");
       defaultText = lib.literalExpression ''
         (optional config.services.matrix-synapse.enable config.services.matrix-synapse.serviceUnit)
         ++ (optional config.services.matrix-conduit.enable "conduit.service")
