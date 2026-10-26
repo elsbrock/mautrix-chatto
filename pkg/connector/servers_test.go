@@ -285,3 +285,30 @@ func TestLoginOfUnconfiguredServerStaysLoggedOutable(t *testing.T) {
 		t.Fatal("login survived logout")
 	}
 }
+
+func TestPersonalSpaceGetsServerLogo(t *testing.T) {
+	h := newHarness(t, func(hc *harnessConfig) { hc.bridge.PersonalFilteringSpaces = true })
+	h.srv.LogoKey = "logo1"
+	h.srv.AddUser("alice", "Alice", "pw")
+	ul := h.login(aliceMXID, "alice", "pw")
+
+	var logo id.ContentURIString
+	h.eventually("server space avatar", func() bool {
+		p, _ := h.br.DB.Portal.GetByKey(h.ctx, serverSpaceKey(testServer))
+		logo = p.AvatarMXC
+		return logo != ""
+	})
+	h.eventually("personal space avatar", func() bool {
+		return len(h.mx.Events(func(e *sentEvent) bool {
+			if e.Type != event.StateRoomAvatar || e.RoomID != ul.SpaceRoom || ul.SpaceRoom == "" {
+				return false
+			}
+			_ = e.Content.ParseRaw(e.Type)
+			c, ok := e.Content.Parsed.(*event.RoomAvatarEventContent)
+			return ok && c.URL == logo
+		})) > 0
+	})
+	if got := ul.Metadata.(*chattoid.UserLoginMetadata).SpaceAvatar; got != string(logo) {
+		t.Fatalf("SpaceAvatar = %q, want %q", got, logo)
+	}
+}

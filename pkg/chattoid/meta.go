@@ -27,6 +27,9 @@ type UserLoginMetadata struct {
 	// RealtimeCursor is the last safe realtime resume cursor. Cursors expire
 	// after 15 minutes, so it only helps across quick restarts.
 	RealtimeCursor string `json:"realtime_cursor,omitempty"`
+	// SpaceAvatar is the server logo last set on the personal filtering
+	// space.
+	SpaceAvatar string `json:"space_avatar,omitempty"`
 }
 
 // GhostMetadata is stored with each ghost.

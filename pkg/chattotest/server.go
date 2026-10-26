@@ -120,6 +120,9 @@ type Server struct {
 	MaxUploadSize int64
 	// Name is the server name in the public profile ("Fake Chatto" if empty).
 	Name string
+	// LogoKey, when set, gives the public profile a logo served under
+	// /assets/server/.
+	LogoKey string
 	// MaxChunkSize is announced for uploads.
 	MaxChunkSize int32
 	// DirectLogin enables password login.

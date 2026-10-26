@@ -206,7 +206,12 @@ func (d *discoveryService) GetServer(context.Context, *connect.Request[discovery
 	if name == "" {
 		name = "Fake Chatto"
 	}
-	return connect.NewResponse(&discoveryv1.GetServerResponse{Profile: &apiv1.ServerPublicProfile{Version: Version, Name: name}}), nil
+	profile := &apiv1.ServerPublicProfile{Version: Version, Name: name}
+	if d.s.LogoKey != "" {
+		logo := d.s.HTTP.URL + "/assets/server/" + d.s.LogoKey
+		profile.LogoUrl = &logo
+	}
+	return connect.NewResponse(&discoveryv1.GetServerResponse{Profile: profile}), nil
 }
 
 type viewerService struct {

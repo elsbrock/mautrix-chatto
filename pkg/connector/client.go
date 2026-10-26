@@ -12,6 +12,8 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/status"
+	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 
 	"github.com/elsbrock/mautrix-chatto/pkg/chattoclient"
 	"github.com/elsbrock/mautrix-chatto/pkg/chattoid"
@@ -342,9 +344,37 @@ func (c *ChattoClient) ensureServerSpace(ctx context.Context) {
 	info := c.getServerInfo(ctx)
 	if portal.MXID != "" {
 		portal.UpdateInfo(ctx, info, c.UserLogin, nil, time.Time{})
+	} else if err := portal.CreateMatrixRoom(ctx, c.UserLogin, info); err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to create server space")
 		return
 	}
-	if err := portal.CreateMatrixRoom(ctx, c.UserLogin, info); err != nil {
-		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to create server space")
+	c.syncPersonalSpaceAvatar(ctx, portal.AvatarMXC)
+}
+
+// syncPersonalSpaceAvatar gives the login's personal filtering space the
+// server logo. bridgev2 only sets the network icon there, and a login
+// belongs to exactly one server.
+func (c *ChattoClient) syncPersonalSpaceAvatar(ctx context.Context, avatar id.ContentURIString) {
+	meta := c.UserLogin.Metadata.(*chattoid.UserLoginMetadata)
+	if meta.SpaceAvatar == string(avatar) {
+		return
+	}
+	spaceRoom, err := c.UserLogin.GetSpaceRoom(ctx)
+	if err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get personal space")
+		return
+	} else if spaceRoom == "" {
+		return
+	}
+	_, err = c.Main.Bridge.Bot.SendState(ctx, spaceRoom, event.StateRoomAvatar, "", &event.Content{
+		Parsed: &event.RoomAvatarEventContent{URL: avatar},
+	}, time.Time{})
+	if err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to set personal space avatar")
+		return
+	}
+	meta.SpaceAvatar = string(avatar)
+	if err := c.UserLogin.Save(ctx); err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to save personal space avatar")
 	}
 }
