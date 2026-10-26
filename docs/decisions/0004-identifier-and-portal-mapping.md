@@ -11,10 +11,10 @@ Status: accepted (2026-10-25)
 - **Portals:** a portal ID is the room ID (`R…`). Receivers are never split:
   room IDs are global on the server, and a DM is one room shared by its
   participants.
-- **Spaces:** each server is a space portal with the ID `server`. Channels
-  and DMs set `ParentID` to it. With `group_spaces`, room groups become space
-  portals with the ID `group:<G…>`, their parent is the server space, and
-  channels in a group set `ParentID` to the group instead.
+- **Spaces:** room groups are space portals with the ID `group:<G…>` and no
+  parent. Channels in a group set `ParentID` to it. Ungrouped channels and DMs
+  have no parent. The server itself is the login's personal filtering space,
+  not a portal (0012).
 - **Messages:** a message ID is the event ID (`E…`). The realtime event ID
   equals the message ID for `message_posted`. The text body is part `""`, and
   each attachment is part `att:<attachment id>`. Bridge notices use

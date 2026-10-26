@@ -21,15 +21,21 @@ every portal, ghost, login, message and ghost bot record.
 - A login belongs to the server in its ID. A login never acts on a portal or
   ghost of another server. bridgev2 can pick such a login (relay, default
   login), so the connector refuses those requests.
-- Each server is a space portal (`<id>.server`), named after the server's
-  public profile. Channels and DMs are its children. With
-  `network.group_spaces` (default off), room groups become subspaces between
-  the server space and their channels.
+- A login belongs to one server, so its personal filtering space is that
+  server's space. The connector names it after the server's public profile
+  and sets its topic and logo. Room groups are always space portals
+  (`<id>.group:<G…>`) without a parent, so bridgev2 adds them to the personal
+  space. Channels sit in their group. Ungrouped channels and DMs have no
+  parent and sit directly in the personal space. This mirrors Chatto's own
+  sidebar: server → groups → channels.
 - A login whose server is no longer configured stays loaded so it can be
   logged out, and reports `chatto-server-not-configured`.
   `strict_server_version` applies per server.
 
 ## Consequences
-A single-server bridge still gets a server space, so adding a second server
-later re-parents nothing. Renaming a server `id` orphans everything bridged
-under it. Turning `group_spaces` off leaves the old group spaces behind.
+Adding a second server later re-parents nothing, because each login already
+has its own space. Renaming a server `id` orphans everything bridged under it.
+The server space depends on `bridge.personal_filtering_spaces` (on by
+default). Without it, group spaces, ungrouped channels and DMs are top-level.
+Group spaces are shared between the users of a server. Each user's DMs stay
+in their own personal space.
