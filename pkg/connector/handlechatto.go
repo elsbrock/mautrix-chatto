@@ -225,7 +225,7 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 			EventMeta:     meta(bridgev2.RemoteEventMessageRemove, e.MessageRetracted.GetRoomId()),
 			TargetMessage: c.messageID(e.MessageRetracted.GetMessageEventId()),
 		})
-		bridgemetrics.MessagesBridged.WithLabelValues("to_matrix", "redaction").Inc()
+		bridgemetrics.MessagesBridged.WithLabelValues(c.serverID, "to_matrix", "redaction").Inc()
 	case *realtimev1.RealtimeEvent_ReactionAdded:
 		c.UserLogin.QueueRemoteEvent(&simplevent.Reaction{
 			EventMeta:     meta(bridgev2.RemoteEventReaction, e.ReactionAdded.GetRoomId()),
@@ -233,14 +233,14 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 			EmojiID:       chattoid.MakeEmojiID(e.ReactionAdded.GetEmoji()),
 			Emoji:         emojiFromShortcode(e.ReactionAdded.GetEmoji()),
 		})
-		bridgemetrics.MessagesBridged.WithLabelValues("to_matrix", "reaction").Inc()
+		bridgemetrics.MessagesBridged.WithLabelValues(c.serverID, "to_matrix", "reaction").Inc()
 	case *realtimev1.RealtimeEvent_ReactionRemoved:
 		c.UserLogin.QueueRemoteEvent(&simplevent.Reaction{
 			EventMeta:     meta(bridgev2.RemoteEventReactionRemove, e.ReactionRemoved.GetRoomId()),
 			TargetMessage: c.messageID(e.ReactionRemoved.GetMessageEventId()),
 			EmojiID:       chattoid.MakeEmojiID(e.ReactionRemoved.GetEmoji()),
 		})
-		bridgemetrics.MessagesBridged.WithLabelValues("to_matrix", "reaction_remove").Inc()
+		bridgemetrics.MessagesBridged.WithLabelValues(c.serverID, "to_matrix", "reaction_remove").Inc()
 	case *realtimev1.RealtimeEvent_UserTyping:
 		if actor == c.userID {
 			return nil
@@ -371,7 +371,7 @@ func (c *ChattoClient) handleMessagePosted(ctx context.Context, evt *realtimev1.
 			// Already retracted.
 			return nil
 		}
-		bridgemetrics.BridgeErrors.WithLabelValues("to_matrix", "message").Inc()
+		bridgemetrics.BridgeErrors.WithLabelValues(c.serverID, "to_matrix", "message").Inc()
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to fetch posted message")
 		if isTransient(ctx, err) {
 			return err
@@ -394,7 +394,7 @@ func (c *ChattoClient) handleMessagePosted(ctx context.Context, evt *realtimev1.
 		ID:                 c.messageID(msg.GetId()),
 		ConvertMessageFunc: c.convertMessageFunc,
 	})
-	bridgemetrics.MessagesBridged.WithLabelValues("to_matrix", "message").Inc()
+	bridgemetrics.MessagesBridged.WithLabelValues(c.serverID, "to_matrix", "message").Inc()
 	return nil
 }
 
@@ -467,7 +467,7 @@ func (c *ChattoClient) handleMessageChanged(ctx context.Context, evt *realtimev1
 		TargetMessage:   c.messageID(msg.GetId()),
 		ConvertEditFunc: c.convertEditFunc,
 	})
-	bridgemetrics.MessagesBridged.WithLabelValues("to_matrix", "edit").Inc()
+	bridgemetrics.MessagesBridged.WithLabelValues(c.serverID, "to_matrix", "edit").Inc()
 	return nil
 }
 

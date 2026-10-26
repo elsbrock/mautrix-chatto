@@ -246,12 +246,12 @@ func (c *ChattoClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.Ma
 	resp, err := api.Messages.CreateMessage(ctx, connect.NewRequest(req))
 	if err != nil {
 		finish("")
-		bridgemetrics.BridgeErrors.WithLabelValues("to_chatto", msgType).Inc()
+		bridgemetrics.BridgeErrors.WithLabelValues(c.serverID, "to_chatto", msgType).Inc()
 		return nil, wrapSendError(err)
 	}
 	created := resp.Msg.GetMessage()
 	finish(string(c.messageID(created.GetId())))
-	bridgemetrics.MessagesBridged.WithLabelValues("to_chatto", msgType).Inc()
+	bridgemetrics.MessagesBridged.WithLabelValues(c.serverID, "to_chatto", msgType).Inc()
 	dbMsg := &database.Message{
 		ID:        c.messageID(created.GetId()),
 		SenderID:  c.ghostID(senderID),
@@ -330,10 +330,10 @@ func (c *ChattoClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Matri
 		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"body"}},
 	}))
 	if err != nil {
-		bridgemetrics.BridgeErrors.WithLabelValues("to_chatto", "edit").Inc()
+		bridgemetrics.BridgeErrors.WithLabelValues(c.serverID, "to_chatto", "edit").Inc()
 		return wrapSendError(err)
 	}
-	bridgemetrics.MessagesBridged.WithLabelValues("to_chatto", "edit").Inc()
+	bridgemetrics.MessagesBridged.WithLabelValues(c.serverID, "to_chatto", "edit").Inc()
 	// bridgev2 saves the edit target afterwards; recording the new text keeps
 	// the realtime echo of this edit from being bridged back.
 	if meta, ok := msg.EditTarget.Metadata.(*chattoid.MessageMetadata); ok {
@@ -359,16 +359,16 @@ func (c *ChattoClient) HandleMatrixMessageRemove(ctx context.Context, msg *bridg
 			if err != nil {
 				return wrapSendError(err)
 			}
-			bridgemetrics.MessagesBridged.WithLabelValues("to_chatto", "attachment_delete").Inc()
+			bridgemetrics.MessagesBridged.WithLabelValues(c.serverID, "to_chatto", "attachment_delete").Inc()
 			return nil
 		}
 	}
 	_, err = api.Messages.DeleteMessage(ctx, connect.NewRequest(&apiv1.DeleteMessageRequest{RoomId: roomID, EventId: eventID}))
 	if err != nil {
-		bridgemetrics.BridgeErrors.WithLabelValues("to_chatto", "redaction").Inc()
+		bridgemetrics.BridgeErrors.WithLabelValues(c.serverID, "to_chatto", "redaction").Inc()
 		return wrapSendError(err)
 	}
-	bridgemetrics.MessagesBridged.WithLabelValues("to_chatto", "redaction").Inc()
+	bridgemetrics.MessagesBridged.WithLabelValues(c.serverID, "to_chatto", "redaction").Inc()
 	return nil
 }
 
@@ -399,10 +399,10 @@ func (c *ChattoClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2.M
 		Emoji:          string(msg.PreHandleResp.EmojiID),
 	}))
 	if err != nil {
-		bridgemetrics.BridgeErrors.WithLabelValues("to_chatto", "reaction").Inc()
+		bridgemetrics.BridgeErrors.WithLabelValues(c.serverID, "to_chatto", "reaction").Inc()
 		return nil, wrapSendError(err)
 	}
-	bridgemetrics.MessagesBridged.WithLabelValues("to_chatto", "reaction").Inc()
+	bridgemetrics.MessagesBridged.WithLabelValues(c.serverID, "to_chatto", "reaction").Inc()
 	return &database.Reaction{}, nil
 }
 
@@ -417,10 +417,10 @@ func (c *ChattoClient) HandleMatrixReactionRemove(ctx context.Context, msg *brid
 		Emoji:          string(msg.TargetReaction.EmojiID),
 	}))
 	if err != nil {
-		bridgemetrics.BridgeErrors.WithLabelValues("to_chatto", "reaction_remove").Inc()
+		bridgemetrics.BridgeErrors.WithLabelValues(c.serverID, "to_chatto", "reaction_remove").Inc()
 		return wrapSendError(err)
 	}
-	bridgemetrics.MessagesBridged.WithLabelValues("to_chatto", "reaction_remove").Inc()
+	bridgemetrics.MessagesBridged.WithLabelValues(c.serverID, "to_chatto", "reaction_remove").Inc()
 	return nil
 }
 

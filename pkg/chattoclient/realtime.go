@@ -190,7 +190,7 @@ func (r *Realtime) Run(ctx context.Context) error {
 	for {
 		r.handler.HandleState(RealtimeConnecting, nil)
 		connected, err := r.runOnce(ctx)
-		bridgemetrics.RealtimeConnected.WithLabelValues(r.label).Set(0)
+		bridgemetrics.RealtimeConnected.WithLabelValues(r.client.server, r.label).Set(0)
 		if ctx.Err() != nil {
 			r.handler.HandleState(RealtimeStopped, nil)
 			return ctx.Err()
@@ -375,7 +375,7 @@ func (r *Realtime) runOnce(ctx context.Context) (connected bool, err error) {
 			snapshot = f.Snapshot
 		case *realtimev1.RealtimeServerFrame_CaughtUp:
 			connected = true
-			bridgemetrics.RealtimeConnected.WithLabelValues(r.label).Set(1)
+			bridgemetrics.RealtimeConnected.WithLabelValues(r.client.server, r.label).Set(1)
 			result := strings.ToLower(strings.TrimPrefix(f.CaughtUp.GetRecovery().String(), "REALTIME_RECOVERY_"))
 			bridgemetrics.RealtimeRecoveries.WithLabelValues(r.client.server, result).Inc()
 			if snapshot != nil {
@@ -405,7 +405,7 @@ func (r *Realtime) observeEvent(evt *realtimev1.RealtimeEvent) {
 	if ts := evt.GetCreatedAt(); ts != nil {
 		lag := time.Since(ts.AsTime())
 		if lag >= 0 {
-			bridgemetrics.RealtimeEventLag.Observe(lag.Seconds())
+			bridgemetrics.RealtimeEventLag.WithLabelValues(r.client.server).Observe(lag.Seconds())
 		}
 	}
 }

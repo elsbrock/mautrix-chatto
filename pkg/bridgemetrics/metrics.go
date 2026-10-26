@@ -29,14 +29,14 @@ var (
 		Help:      "Failed ConnectRPC calls to Chatto.",
 	}, []string{"server", "procedure", "code"})
 
-	// RealtimeConnected is 1 while a login's realtime socket is subscribed.
+	// RealtimeConnected is 1 while a login's realtime socket is subscribed, by server and login.
 	RealtimeConnected = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
 		Name:      "realtime_connected",
 		Help:      "Whether the realtime WebSocket of a login is connected (1) or not (0).",
-	}, []string{"login"})
+	}, []string{"server", "login"})
 
-	// RealtimeReconnects counts reconnect attempts by reason.
+	// RealtimeReconnects counts reconnect attempts by server and reason.
 	RealtimeReconnects = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Name:      "realtime_reconnects_total",
@@ -58,41 +58,41 @@ var (
 	}, []string{"server", "type"})
 
 	// RealtimeEventLag observes the delay between an event's creation on
-	// Chatto and its arrival at the bridge.
-	RealtimeEventLag = prometheus.NewHistogram(prometheus.HistogramOpts{
+	// Chatto and its arrival at the bridge, by server.
+	RealtimeEventLag = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: namespace,
 		Name:      "realtime_event_lag_seconds",
 		Help:      "Delay between event creation on Chatto and receipt by the bridge.",
 		Buckets:   []float64{.05, .1, .25, .5, 1, 2.5, 5, 10, 30, 60, 300},
-	})
+	}, []string{"server"})
 
-	// MessagesBridged counts bridged messages by direction and kind.
+	// MessagesBridged counts bridged messages by server, direction and kind.
 	MessagesBridged = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Name:      "messages_bridged_total",
 		Help:      "Events bridged, by direction (to_matrix, to_chatto) and type.",
-	}, []string{"direction", "type"})
+	}, []string{"server", "direction", "type"})
 
-	// BridgeErrors counts events that failed to bridge.
+	// BridgeErrors counts events that failed to bridge, by server.
 	BridgeErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Name:      "bridge_errors_total",
 		Help:      "Events that failed to bridge, by direction and type.",
-	}, []string{"direction", "type"})
+	}, []string{"server", "direction", "type"})
 
-	// TokenRefreshes counts access token refreshes by result.
+	// TokenRefreshes counts access token refreshes by server and result.
 	TokenRefreshes = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Name:      "token_refreshes_total",
 		Help:      "Chatto access token refreshes by result.",
-	}, []string{"result"})
+	}, []string{"server", "result"})
 
-	// Logins reports the number of logins in each bridge state.
+	// Logins reports the number of logins per server in each bridge state.
 	Logins = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
 		Name:      "logins",
 		Help:      "Number of Chatto logins by bridge state event.",
-	}, []string{"state"})
+	}, []string{"server", "state"})
 
 	// ServerInfo exposes each Chatto server's version as a label.
 	ServerInfo = prometheus.NewGaugeVec(prometheus.GaugeOpts{

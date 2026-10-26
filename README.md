@@ -206,6 +206,8 @@ docker run -d -v $PWD/data:/data -p 29340:29340 mautrix-chatto
   - token refreshes
   - logins by state
   - the Chatto server version
+- Every metric about a Chatto server or login has a `server` label holding
+  the configured server ID.
 - [`deploy/monitoring/grafana-dashboard.json`](deploy/monitoring/grafana-dashboard.json)
   is a ready-made dashboard. The NixOS module provisions it when
   `services.grafana` is enabled (`services.mautrix-chatto.grafanaDashboard`).

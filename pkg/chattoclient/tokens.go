@@ -95,10 +95,10 @@ func (s *SessionTokenSource) refreshLocked(ctx context.Context) error {
 		if errors.Is(err, ErrSessionRevoked) {
 			result = "revoked"
 		}
-		bridgemetrics.TokenRefreshes.WithLabelValues(result).Inc()
+		bridgemetrics.TokenRefreshes.WithLabelValues(s.client.server, result).Inc()
 		return err
 	}
-	bridgemetrics.TokenRefreshes.WithLabelValues("ok").Inc()
+	bridgemetrics.TokenRefreshes.WithLabelValues(s.client.server, "ok").Inc()
 	s.sess = *next
 	if s.persist != nil {
 		// The new refresh token is already live; failing to persist it means

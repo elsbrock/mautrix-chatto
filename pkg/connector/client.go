@@ -292,7 +292,7 @@ func (c *ChattoClient) LogoutRemote(ctx context.Context) {
 	meta.Session = nil
 	meta.BotKey = ""
 	meta.RealtimeCursor = ""
-	c.Main.recordLoginState(c.UserLogin.ID, "")
+	c.Main.recordLoginState(c.serverID, c.UserLogin.ID, "")
 	c.api = nil
 	c.tokens = nil
 }
@@ -324,6 +324,6 @@ func isAuthError(err error) bool {
 
 // sendState reports a bridge state and records it in the login gauge.
 func (c *ChattoClient) sendState(state status.BridgeState) {
-	c.Main.recordLoginState(c.UserLogin.ID, state.StateEvent)
+	c.Main.recordLoginState(c.serverID, c.UserLogin.ID, state.StateEvent)
 	c.UserLogin.BridgeState.Send(state)
 }

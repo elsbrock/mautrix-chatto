@@ -312,5 +312,5 @@ func (h *harness) dbMessage(chattoID string) []*database.Message {
 func (c *Connector) loginState(id networkid.UserLoginID) status.BridgeStateEvent {
 	c.loginStatesLock.Lock()
 	defer c.loginStatesLock.Unlock()
-	return c.loginStates[id]
+	return c.loginStates[id].state
 }

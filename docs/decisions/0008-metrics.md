@@ -15,6 +15,11 @@ mautrix-go v0.32 bridgev2 has no Prometheus metrics.
   - token refreshes by result
   - logins by bridge state
   - server and build info
+- Every metric about a Chatto server or login carries a `server` label with
+  the configured server ID (`network.servers[].id`), so one bridge serving
+  several servers can be told apart per server and still summed across them.
+  The ID is not unique between deployments; the scrape `job`/`instance`
+  separates those.
 - These are served on a separate listener (`network.metrics.listen`) together
   with `/healthz` (process alive) and `/readyz` (connector started). The
   appservice port is not reused, so metrics can stay on localhost.

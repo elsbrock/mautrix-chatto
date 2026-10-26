@@ -44,30 +44,45 @@ type Connector struct {
 	ready     bool
 
 	loginStatesLock sync.Mutex
-	loginStates     map[networkid.UserLoginID]status.BridgeStateEvent
+	loginStates     map[networkid.UserLoginID]loginState
 }
 
-// recordLoginState updates the per-state login gauge.
-func (c *Connector) recordLoginState(id networkid.UserLoginID, state status.BridgeStateEvent) {
+// loginState is a login's last bridge state and the server it belongs to.
+type loginState struct {
+	server string
+	state  status.BridgeStateEvent
+}
+
+// recordLoginState updates the per-server, per-state login gauge.
+func (c *Connector) recordLoginState(serverID string, id networkid.UserLoginID, state status.BridgeStateEvent) {
 	c.loginStatesLock.Lock()
 	defer c.loginStatesLock.Unlock()
 	if c.loginStates == nil {
-		c.loginStates = make(map[networkid.UserLoginID]status.BridgeStateEvent)
+		c.loginStates = make(map[networkid.UserLoginID]loginState)
 	}
 	if state == "" {
 		delete(c.loginStates, id)
 	} else {
-		c.loginStates[id] = state
+		c.loginStates[id] = loginState{serverID, state}
 	}
-	counts := make(map[status.BridgeStateEvent]int)
+	// Every configured server gets a full set of series, so a server whose
+	// last login went away drops to zero instead of keeping stale counts.
+	counts := make(map[loginState]int)
+	servers := make(map[string]bool, len(c.Config.Servers))
+	for _, srv := range c.Config.Servers {
+		servers[srv.ID] = true
+	}
 	for _, s := range c.loginStates {
 		counts[s]++
+		servers[s.server] = true
 	}
-	for _, s := range []status.BridgeStateEvent{
-		status.StateConnecting, status.StateConnected, status.StateTransientDisconnect,
-		status.StateBadCredentials, status.StateUnknownError, status.StateLoggedOut,
-	} {
-		bridgemetrics.Logins.WithLabelValues(string(s)).Set(float64(counts[s]))
+	for srv := range servers {
+		for _, s := range []status.BridgeStateEvent{
+			status.StateConnecting, status.StateConnected, status.StateTransientDisconnect,
+			status.StateBadCredentials, status.StateUnknownError, status.StateLoggedOut,
+		} {
+			bridgemetrics.Logins.WithLabelValues(srv, string(s)).Set(float64(counts[loginState{srv, s}]))
+		}
 	}
 }
 
