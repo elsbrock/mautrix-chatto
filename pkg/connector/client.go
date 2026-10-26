@@ -188,7 +188,7 @@ func (c *ChattoClient) Connect(ctx context.Context) {
 	} else if profile := viewer.Msg.GetUser().GetProfile(); profile != nil {
 		c.updateRemoteProfile(ctx, profile)
 	}
-	c.refreshServerSpace(ctx)
+	c.ensureServerSpace(ctx)
 
 	runCtx, cancel := context.WithCancel(c.UserLogin.Log.WithContext(c.Main.Bridge.BackgroundCtx))
 	c.stopLock.Lock()
@@ -327,12 +327,24 @@ func (c *ChattoClient) sendState(state status.BridgeState) {
 	c.UserLogin.BridgeState.Send(state)
 }
 
-// refreshServerSpace updates the server space's name, topic and avatar, so a
-// space created while the server profile was unavailable gets fixed up.
-func (c *ChattoClient) refreshServerSpace(ctx context.Context) {
-	portal, err := c.Main.Bridge.GetExistingPortalByKey(ctx, networkid.PortalKey{ID: chattoid.MakeServerPortalID(c.serverID)})
-	if err != nil || portal == nil || portal.MXID == "" {
+// ensureServerSpace creates the server space before any room of the server,
+// or refreshes its name, topic and avatar if it exists.
+//
+// bridgev2 creates a missing parent space from the child room's event
+// context and abandons it when that context ends, which can leave the space
+// half-created; creating it up front avoids that path.
+func (c *ChattoClient) ensureServerSpace(ctx context.Context) {
+	portal, err := c.Main.Bridge.GetPortalByKey(ctx, networkid.PortalKey{ID: chattoid.MakeServerPortalID(c.serverID)})
+	if err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get server space portal")
 		return
 	}
-	portal.UpdateInfo(ctx, c.getServerInfo(ctx), c.UserLogin, nil, time.Time{})
+	info := c.getServerInfo(ctx)
+	if portal.MXID != "" {
+		portal.UpdateInfo(ctx, info, c.UserLogin, nil, time.Time{})
+		return
+	}
+	if err := portal.CreateMatrixRoom(ctx, c.UserLogin, info); err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to create server space")
+	}
 }
