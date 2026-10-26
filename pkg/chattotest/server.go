@@ -7,6 +7,8 @@ package chattotest
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -139,6 +141,7 @@ type Server struct {
 	assets      map[string]*Attachment
 	readMarkers map[string]string // userID/roomID → event ID
 	idem        map[string]string // userID/key → message ID
+	authCodes   map[string]AuthCode
 	Permissions []Permission
 	TypingCalls []string // "userID/roomID" per RefreshTypingIndicator call
 	Calls       []string // procedures called, in order
@@ -567,17 +570,59 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// AuthCode is an issued OAuth authorization code.
+type AuthCode struct {
+	UserID, Challenge, ClientID, RedirectURI string
+}
+
+// IssueAuthCode creates an authorization code as if the user approved a
+// client at /oauth/authorize.
+func (s *Server) IssueAuthCode(c AuthCode) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	code := "code_" + s.newID("C")
+	if s.authCodes == nil {
+		s.authCodes = make(map[string]AuthCode)
+	}
+	s.authCodes[code] = c
+	return code
+}
+
 func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		GrantType    string `json:"grant_type"`
 		RefreshToken string `json:"refresh_token"`
+		Code         string `json:"code"`
+		CodeVerifier string `json:"code_verifier"`
+		RedirectURI  string `json:"redirect_uri"`
+		ClientID     string `json:"client_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.GrantType != "refresh_token" {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if req.GrantType == "authorization_code" {
+		ac, ok := s.authCodes[req.Code]
+		delete(s.authCodes, req.Code)
+		sum := sha256.Sum256([]byte(req.CodeVerifier))
+		if !ok || ac.ClientID != req.ClientID || ac.RedirectURI != req.RedirectURI ||
+			base64.RawURLEncoding.EncodeToString(sum[:]) != ac.Challenge {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant"})
+			return
+		}
+		access, refresh := s.issueSessionLocked(&session{userID: ac.UserID, usedRefreshes: map[string]bool{}})
+		writeJSON(w, http.StatusOK, map[string]any{
+			"access_token": access, "token_type": "Bearer", "expires_in": int(s.AccessTTL.Seconds()),
+			"refresh_token": refresh, "refresh_token_expires_in": 90 * 24 * 3600,
+		})
+		return
+	}
+	if req.GrantType != "refresh_token" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported_grant_type"})
+		return
+	}
 	sess, ok := s.refresh[req.RefreshToken]
 	if !ok {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant"})

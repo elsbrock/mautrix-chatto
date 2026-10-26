@@ -53,6 +53,13 @@ func (c *Connector) GetLoginFlows() []bridgev2.LoginFlow {
 			ID:          LoginFlowPassword,
 		})
 	}
+	if c.oauthEnabled() {
+		flows = append(flows, bridgev2.LoginFlow{
+			Name:        "Browser",
+			Description: "Sign in to Chatto in your browser (OAuth)",
+			ID:          LoginFlowOAuth,
+		})
+	}
 	flows = append(flows, bridgev2.LoginFlow{
 		Name:        "Token",
 		Description: "Log in with a bot API key (cht_BK_…) or a session refresh token",
@@ -70,6 +77,11 @@ func (c *Connector) CreateLogin(ctx context.Context, user *bridgev2.User, flowID
 		return &PasswordLogin{User: user, Main: c}, nil
 	case LoginFlowToken:
 		return &TokenLogin{User: user, Main: c}, nil
+	case LoginFlowOAuth:
+		if !c.oauthEnabled() || c.oauth.pending == nil {
+			return nil, bridgev2.ErrInvalidLoginFlowID
+		}
+		return &OAuthLogin{User: user, Main: c}, nil
 	}
 	return nil, bridgev2.ErrInvalidLoginFlowID
 }

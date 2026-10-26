@@ -189,6 +189,41 @@ func (c *Client) RefreshSession(ctx context.Context, sess Session) (*Session, er
 	return next, nil
 }
 
+// ExchangeAuthorizationCode completes an OAuth authorization code flow with
+// PKCE. clientID is the client metadata document URL.
+func (c *Client) ExchangeAuthorizationCode(ctx context.Context, code, verifier, redirectURI, clientID string) (*Session, error) {
+	var resp struct {
+		AccessToken           string `json:"access_token"`
+		ExpiresIn             int64  `json:"expires_in"`
+		RefreshToken          string `json:"refresh_token"`
+		RefreshTokenExpiresIn int64  `json:"refresh_token_expires_in"`
+	}
+	status, raw, err := c.postJSON(ctx, "/oauth/token", "", map[string]string{
+		"grant_type":    "authorization_code",
+		"code":          code,
+		"code_verifier": verifier,
+		"redirect_uri":  redirectURI,
+		"client_id":     clientID,
+	}, &resp)
+	if err != nil {
+		return nil, err
+	}
+	if status != http.StatusOK {
+		return nil, &HTTPError{StatusCode: status, Body: truncate(string(raw), 200)}
+	}
+	now := c.now()
+	sess := &Session{
+		AccessToken:  resp.AccessToken,
+		RefreshToken: resp.RefreshToken,
+		AccessExpiry: now.Add(time.Duration(resp.ExpiresIn) * time.Second),
+		ClientID:     clientID,
+	}
+	if resp.RefreshTokenExpiresIn > 0 {
+		sess.RefreshExpiry = now.Add(time.Duration(resp.RefreshTokenExpiresIn) * time.Second)
+	}
+	return sess, nil
+}
+
 // PrepareRefresh returns sess with a fresh PendingRefreshID unless one is
 // already pending.
 func PrepareRefresh(sess Session) Session {

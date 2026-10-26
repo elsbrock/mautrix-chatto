@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -36,15 +38,27 @@ type harness struct {
 	conn *Connector
 }
 
-type harnessOpt func(cfg *bridgeconfig.BridgeConfig, nc *Config)
+// harnessConfig is what harness options can change.
+type harnessConfig struct {
+	bridge  *bridgeconfig.BridgeConfig
+	network *Config
+	// publicRouter serves the bridge's public HTTP routes (OAuth).
+	publicRouter bool
+}
+
+type harnessOpt func(*harnessConfig)
 
 func withBackfill(n int) harnessOpt {
-	return func(cfg *bridgeconfig.BridgeConfig, _ *Config) {
-		cfg.Backfill.Enabled = true
-		cfg.Backfill.MaxInitialMessages = n
-		cfg.Backfill.MaxCatchupMessages = n
-		cfg.Backfill.Threads.MaxInitialMessages = n
+	return func(hc *harnessConfig) {
+		hc.bridge.Backfill.Enabled = true
+		hc.bridge.Backfill.MaxInitialMessages = n
+		hc.bridge.Backfill.MaxCatchupMessages = n
+		hc.bridge.Backfill.Threads.MaxInitialMessages = n
 	}
+}
+
+func withPublicRouter() harnessOpt {
+	return func(hc *harnessConfig) { hc.publicRouter = true }
 }
 
 var harnessCounter int
@@ -101,13 +115,21 @@ func newHarness(t *testing.T, opts ...harnessOpt) *harness {
 		ThreadEcho:         "skip",
 		AllowPasswordLogin: true,
 	}
+	hc := &harnessConfig{bridge: cfg, network: &conn.Config}
 	for _, o := range opts {
-		o(cfg, &conn.Config)
+		o(hc)
 	}
 	if err := conn.Config.PostProcess(); err != nil {
 		t.Fatal(err)
 	}
 	mx := newMockMatrix()
+	if hc.publicRouter {
+		mx.router = http.NewServeMux()
+		pub := httptest.NewServer(mx.router)
+		t.Cleanup(pub.Close)
+		mx.publicAddress = pub.URL
+		conn.allowInsecureOAuth = true
+	}
 	// Bridge goroutines may still log after a test ends, which t.Log does
 	// not allow, so logs go to stderr (verbose) or nowhere.
 	log := zerolog.Nop()

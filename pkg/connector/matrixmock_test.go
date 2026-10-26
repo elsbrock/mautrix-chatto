@@ -63,6 +63,9 @@ type mockMatrix struct {
 	presences map[id.UserID]mautrix.ReqPresence
 	intents   map[id.UserID]*mockIntent
 	notify    chan struct{}
+
+	router        *http.ServeMux
+	publicAddress string
 }
 
 type mockRoom struct {
@@ -378,3 +381,9 @@ func (i *mockIntent) SetPresence(ctx context.Context, presence mautrix.ReqPresen
 	i.m.poke()
 	return nil
 }
+
+// GetPublicAddress and GetRouter make the mock a MatrixConnectorWithServer.
+// The public address is empty unless a test enables the router.
+func (m *mockMatrix) GetPublicAddress() string { return m.publicAddress }
+
+func (m *mockMatrix) GetRouter() *http.ServeMux { return m.router }

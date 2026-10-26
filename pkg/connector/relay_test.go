@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
@@ -16,9 +15,9 @@ import (
 const carolMXID = id.UserID("@carol:test")
 
 func withGhostBots() harnessOpt {
-	return func(_ *bridgeconfig.BridgeConfig, nc *Config) {
-		nc.GhostBots.Enabled = true
-		nc.GhostBots.LoginPrefix = "mx-"
+	return func(hc *harnessConfig) {
+		hc.network.GhostBots.Enabled = true
+		hc.network.GhostBots.LoginPrefix = "mx-"
 	}
 }
 

@@ -38,6 +38,9 @@ type Connector struct {
 	// a message another login (or a ghost bot) is still sending.
 	echoes    *echoTracker
 	ghostBots ghostBots
+	oauth     oauthState
+	// allowInsecureOAuth permits a plain-HTTP public address (tests only).
+	allowInsecureOAuth bool
 
 	readyLock sync.RWMutex
 	ready     bool
@@ -149,6 +152,7 @@ func (c *Connector) Start(ctx context.Context) error {
 			log.Info().Str("server_version", version).Msg("Connected to Chatto server")
 		}
 	}
+	c.registerOAuthRoutes()
 	c.setReady(true)
 	return nil
 }
