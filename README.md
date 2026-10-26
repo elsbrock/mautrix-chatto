@@ -60,6 +60,10 @@ Send `login` to the bridge bot. The available flows are:
 - **Browser (OAuth):** only offered when `appservice.public_address` is a
   public `https://` URL. The bridge hosts its OAuth client metadata document
   at `/chatto/oauth/client.json`. Chatto has no client registration.
+  Chatto fetches that document itself and refuses private, loopback and CGNAT
+  addresses (including Tailscale's 100.64.0.0/10), so the public address must
+  resolve to a public IP. Before linking, the callback page shows which Matrix
+  account will receive the session.
 - **Token:** a bot API key (`cht_BK_…`) or a session refresh token
   (`cht_RT_…`). The bridge takes over a refresh token, so the session it came
   from will be signed out.

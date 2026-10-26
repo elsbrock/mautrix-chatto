@@ -36,6 +36,7 @@ var chattoMarkdown = goldmark.New(
 			util.Prioritized(parser.NewLinkParser(), 200),
 			util.Prioritized(parser.NewAutoLinkParser(), 300),
 			util.Prioritized(parser.NewRawHTMLParser(), 400),
+			util.Prioritized(wordBoundaryEmphasisParser{}, 450),
 			util.Prioritized(parser.NewEmphasisParser(), 500),
 		),
 	)),
@@ -418,7 +419,9 @@ func (r *htmlRenderer) renderText(node *ast.Text) {
 func (r *htmlRenderer) allowedHref(dest string) (string, bool) {
 	dest = strings.TrimSpace(dest)
 	if strings.HasPrefix(dest, "/") && !strings.HasPrefix(dest, "//") {
-		if r.opts.ServerURL == "" {
+		// Chatto's isAllowedMarkdownLink rejects backslashes and whitespace
+		// in root-relative paths.
+		if r.opts.ServerURL == "" || strings.ContainsAny(dest, "\\ \t\r\n") {
 			return "", false
 		}
 		return strings.TrimRight(r.opts.ServerURL, "/") + dest, true
@@ -428,7 +431,13 @@ func (r *htmlRenderer) allowedHref(dest string) (string, bool) {
 		return "", false
 	}
 	switch strings.ToLower(u.Scheme) {
-	case "http", "https", "mailto":
+	case "http", "https":
+		// "http:evil" has no authority and is not a link on Chatto.
+		if u.Host == "" {
+			return "", false
+		}
+		return dest, true
+	case "mailto":
 		return dest, true
 	}
 	return "", false

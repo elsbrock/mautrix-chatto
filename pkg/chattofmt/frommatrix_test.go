@@ -48,6 +48,7 @@ func TestFromMatrix(t *testing.T) {
 		{name: "inline code", html: "<code>x</code>", want: "`x`"},
 		{name: "code block", html: `<pre><code class="language-go">a := 1</code></pre>`, want: "```go\na := 1\n```"},
 		{name: "link", html: `<a href="https://example.com">site</a>`, want: "[site](https://example.com)"},
+		{name: "link with spaces and parens", html: `<a href="https://e.com/a b)c">x</a>`, want: "[x](https://e.com/a%20b%29c)"},
 		{name: "bare link", html: `<a href="https://example.com">https://example.com</a>`, want: "https://example.com"},
 		{name: "unsupported link", html: `<a href="ftp://x">files</a>`, want: "files (ftp://x)"},
 		{name: "ghost pill", html: `hi <a href="https://matrix.to/#/@chatto_ualice:example.com">Alice</a>`, want: "hi @alice"},

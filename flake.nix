@@ -57,10 +57,15 @@
       );
 
       nixosModules = rec {
-        mautrix-chatto = {
-          imports = [ ./nix/module.nix ];
-          nixpkgs.overlays = [ self.overlays.default ];
-        };
+        mautrix-chatto =
+          { lib, pkgs, ... }:
+          {
+            imports = [ ./nix/module.nix ];
+            # Not an overlay, so this also works with a read-only nixpkgs.pkgs.
+            services.mautrix-chatto.package =
+              lib.mkDefault
+                self.packages.${pkgs.stdenv.hostPlatform.system}.mautrix-chatto;
+          };
         default = mautrix-chatto;
       };
 
@@ -149,6 +154,10 @@
                     metrics.enable = true;
                   };
                   services.prometheus.enable = true;
+                  services.matrix-synapse = {
+                    enable = true;
+                    settings.server_name = "example.com";
+                  };
                 }
               ];
             }).config.systemd.units."mautrix-chatto.service".unit;

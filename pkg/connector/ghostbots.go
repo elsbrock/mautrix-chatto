@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
+	"unicode"
 
 	"connectrpc.com/connect"
 	"github.com/rs/zerolog"
@@ -48,22 +50,34 @@ func (b *ghostBot) inRoom(roomID string) bool {
 // that user's lock so that RPCs never run under mu.
 type ghostBots struct {
 	mu        sync.Mutex
-	byMXID    map[id.UserID]*ghostBot
-	byUser    map[string]id.UserID // Chatto user ID → Matrix user
-	userLocks map[id.UserID]*sync.Mutex
+	byKey     map[ghostBotID]*ghostBot
+	byUser    map[string]ghostBotID // Chatto user ID → key
+	userLocks map[ghostBotID]*sync.Mutex
+	failures  map[ghostBotID]time.Time
 	loaded    bool
 }
 
+// ghostBotID identifies a ghost bot: one per Matrix user and relay login,
+// because only a bot's owner can grant it permissions in rooms.
+type ghostBotID string
+
+func makeGhostBotID(owner string, mxid id.UserID) ghostBotID {
+	return ghostBotID(owner + "|" + string(mxid))
+}
+
+// ghostBotRetryAfter is how long creation is not retried after a failure.
+const ghostBotRetryAfter = 10 * time.Minute
+
 // lockUser serialises ghost bot work for one Matrix user.
-func (gb *ghostBots) lockUser(mxid id.UserID) func() {
+func (gb *ghostBots) lockUser(key ghostBotID) func() {
 	gb.mu.Lock()
 	if gb.userLocks == nil {
-		gb.userLocks = make(map[id.UserID]*sync.Mutex)
+		gb.userLocks = make(map[ghostBotID]*sync.Mutex)
 	}
-	l, ok := gb.userLocks[mxid]
+	l, ok := gb.userLocks[key]
 	if !ok {
 		l = &sync.Mutex{}
-		gb.userLocks[mxid] = l
+		gb.userLocks[key] = l
 	}
 	gb.mu.Unlock()
 	l.Lock()
@@ -71,11 +85,11 @@ func (gb *ghostBots) lockUser(mxid id.UserID) func() {
 }
 
 // get returns a copy of a user's ghost bot, if any.
-func (c *Connector) getGhostBot(ctx context.Context, mxid id.UserID) *ghostBot {
+func (c *Connector) getGhostBot(ctx context.Context, key ghostBotID) *ghostBot {
 	c.ghostBots.mu.Lock()
 	defer c.ghostBots.mu.Unlock()
 	c.loadGhostBotsLocked(ctx)
-	if bot, ok := c.ghostBots.byMXID[mxid]; ok {
+	if bot, ok := c.ghostBots.byKey[key]; ok {
 		cp := *bot
 		cp.Rooms = append([]string(nil), bot.Rooms...)
 		return &cp
@@ -83,51 +97,52 @@ func (c *Connector) getGhostBot(ctx context.Context, mxid id.UserID) *ghostBot {
 	return nil
 }
 
-func (c *Connector) storeGhostBot(ctx context.Context, mxid id.UserID, bot *ghostBot) {
+func (c *Connector) storeGhostBot(ctx context.Context, key ghostBotID, bot *ghostBot) {
 	c.ghostBots.mu.Lock()
 	defer c.ghostBots.mu.Unlock()
 	c.loadGhostBotsLocked(ctx)
-	c.saveGhostBotLocked(ctx, mxid, bot)
+	c.saveGhostBotLocked(ctx, key, bot)
 }
 
-func ghostBotKey(mxid id.UserID) database.Key {
-	return database.Key("chatto_ghost_bot:" + string(mxid))
+func ghostBotKVKey(key ghostBotID) database.Key {
+	return database.Key("chatto_ghost_bot:" + string(key))
 }
 
-const ghostBotIndexKey = database.Key("chatto_ghost_bot_index")
+const ghostBotIndexKey = database.Key("chatto_ghost_bot_index_v2")
 
 func (c *Connector) loadGhostBotsLocked(ctx context.Context) {
 	gb := &c.ghostBots
 	if gb.loaded {
 		return
 	}
-	gb.byMXID = make(map[id.UserID]*ghostBot)
-	gb.byUser = make(map[string]id.UserID)
-	var index []id.UserID
+	gb.byKey = make(map[ghostBotID]*ghostBot)
+	gb.byUser = make(map[string]ghostBotID)
+	gb.failures = make(map[ghostBotID]time.Time)
+	var index []ghostBotID
 	if raw := c.Bridge.DB.KV.Get(ctx, ghostBotIndexKey); raw != "" {
 		_ = json.Unmarshal([]byte(raw), &index)
 	}
-	for _, mxid := range index {
+	for _, key := range index {
 		var bot ghostBot
-		if raw := c.Bridge.DB.KV.Get(ctx, ghostBotKey(mxid)); raw != "" && json.Unmarshal([]byte(raw), &bot) == nil {
-			gb.byMXID[mxid] = &bot
-			gb.byUser[bot.UserID] = mxid
+		if raw := c.Bridge.DB.KV.Get(ctx, ghostBotKVKey(key)); raw != "" && json.Unmarshal([]byte(raw), &bot) == nil {
+			gb.byKey[key] = &bot
+			gb.byUser[bot.UserID] = key
 		}
 	}
 	gb.loaded = true
 }
 
-func (c *Connector) saveGhostBotLocked(ctx context.Context, mxid id.UserID, bot *ghostBot) {
+func (c *Connector) saveGhostBotLocked(ctx context.Context, key ghostBotID, bot *ghostBot) {
 	gb := &c.ghostBots
 	stored := *bot
 	stored.Rooms = append([]string(nil), bot.Rooms...)
-	gb.byMXID[mxid] = &stored
-	gb.byUser[bot.UserID] = mxid
+	gb.byKey[key] = &stored
+	gb.byUser[bot.UserID] = key
 	data, _ := json.Marshal(&stored)
-	c.Bridge.DB.KV.Set(ctx, ghostBotKey(mxid), string(data))
-	index := make([]id.UserID, 0, len(gb.byMXID))
-	for m := range gb.byMXID {
-		index = append(index, m)
+	c.Bridge.DB.KV.Set(ctx, ghostBotKVKey(key), string(data))
+	index := make([]ghostBotID, 0, len(gb.byKey))
+	for k := range gb.byKey {
+		index = append(index, k)
 	}
 	indexData, _ := json.Marshal(index)
 	c.Bridge.DB.KV.Set(ctx, ghostBotIndexKey, string(indexData))
@@ -146,8 +161,9 @@ func (c *Connector) IsGhostBot(ctx context.Context, chattoUserID string) bool {
 	return ok
 }
 
-// ghostBotLogin derives a valid, stable Chatto login for a Matrix user.
-func ghostBotLogin(prefix string, mxid id.UserID) string {
+// ghostBotLogin derives a valid, stable Chatto login for a Matrix user. The
+// suffix hashes the user and salt (the owner); hashLen grows on collisions.
+func ghostBotLogin(prefix string, mxid id.UserID, salt string, hashLen int) string {
 	localpart, _, _ := mxid.Parse()
 	var sb strings.Builder
 	for _, r := range strings.ToLower(localpart) {
@@ -156,8 +172,8 @@ func ghostBotLogin(prefix string, mxid id.UserID) string {
 		}
 	}
 	clean := strings.Trim(sb.String(), ".")
-	sum := sha256.Sum256([]byte(mxid))
-	suffix := "-" + hex.EncodeToString(sum[:])[:4]
+	sum := sha256.Sum256([]byte(salt + "|" + string(mxid)))
+	suffix := "-" + hex.EncodeToString(sum[:])[:hashLen]
 	maxLocal := 32 - len(prefix) - len(suffix)
 	if len(clean) > maxLocal {
 		clean = clean[:maxLocal]
@@ -193,28 +209,26 @@ func (c *ChattoClient) ensureGhostBot(ctx context.Context, sender *bridgev2.Orig
 		return nil, errGhostBotsUnavailable
 	}
 	main := c.Main
-	unlock := main.ghostBots.lockUser(sender.UserID)
+	key := makeGhostBotID(c.userID, sender.UserID)
+	unlock := main.ghostBots.lockUser(key)
 	defer unlock()
-	bot := main.getGhostBot(ctx, sender.UserID)
-	name := main.Config.FormatGhostBotDisplayname(GhostBotParams{DisplayName: origSenderName(sender), UserID: string(sender.UserID)})
+	bot := main.getGhostBot(ctx, key)
+	name := sanitizeDisplayName(main.Config.FormatGhostBotDisplayname(GhostBotParams{DisplayName: origSenderName(sender), UserID: string(sender.UserID)}))
 	if name == "" {
-		name = string(sender.UserID)
+		name = truncateRunes(string(sender.UserID), 32)
 	}
 	if bot == nil {
-		login := ghostBotLogin(main.Config.GhostBots.LoginPrefix, sender.UserID)
-		keyName := "mautrix-chatto"
-		resp, err := c.api.Bots.CreateBot(ctx, connect.NewRequest(&apiv1.CreateBotRequest{
-			Login: login, DisplayName: name, ApiKeyName: &keyName,
-		}))
+		if main.ghostBotFailedRecently(key) {
+			return nil, errGhostBotsUnavailable
+		}
+		var err error
+		bot, err = c.createGhostBot(ctx, sender.UserID, name)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create ghost bot: %w", err)
+			main.recordGhostBotFailure(key)
+			return nil, err
 		}
-		bot = &ghostBot{
-			UserID: resp.Msg.GetBot().GetUser().GetId(), Login: login,
-			APIKey: resp.Msg.GetApiKey(), Owner: c.userID, DisplayName: name,
-		}
-		main.storeGhostBot(ctx, sender.UserID, bot)
-		zerolog.Ctx(ctx).Info().Str("bot_id", bot.UserID).Str("bot_login", login).
+		main.storeGhostBot(ctx, key, bot)
+		zerolog.Ctx(ctx).Info().Str("bot_id", bot.UserID).Str("bot_login", bot.Login).
 			Stringer("matrix_user", sender.UserID).Msg("Created ghost bot")
 	} else if bot.DisplayName != name {
 		nameCopy := name
@@ -223,7 +237,7 @@ func (c *ChattoClient) ensureGhostBot(ctx context.Context, sender *bridgev2.Orig
 		}))
 		if err == nil {
 			bot.DisplayName = name
-			main.storeGhostBot(ctx, sender.UserID, bot)
+			main.storeGhostBot(ctx, key, bot)
 		}
 	}
 	if !bot.inRoom(roomID) {
@@ -243,7 +257,7 @@ func (c *ChattoClient) ensureGhostBot(ctx context.Context, sender *bridgev2.Orig
 			return nil, fmt.Errorf("failed to add ghost bot to room: %w", err)
 		}
 		bot.Rooms = append(bot.Rooms, roomID)
-		main.storeGhostBot(ctx, sender.UserID, bot)
+		main.storeGhostBot(ctx, key, bot)
 	}
 	return bot, nil
 }
@@ -262,8 +276,62 @@ func (c *Connector) ghostBotForMessage(ctx context.Context, senderID string) *gh
 	c.ghostBots.mu.Lock()
 	defer c.ghostBots.mu.Unlock()
 	c.loadGhostBotsLocked(ctx)
-	if mxid, ok := c.ghostBots.byUser[senderID]; ok {
-		return c.ghostBots.byMXID[mxid]
+	if key, ok := c.ghostBots.byUser[senderID]; ok {
+		return c.ghostBots.byKey[key]
 	}
 	return nil
+}
+
+// createGhostBot creates the Chatto bot, trying longer login suffixes if a
+// login is already taken.
+func (c *ChattoClient) createGhostBot(ctx context.Context, mxid id.UserID, name string) (*ghostBot, error) {
+	keyName := "mautrix-chatto"
+	var lastErr error
+	for _, hashLen := range []int{4, 8, 12} {
+		login := ghostBotLogin(c.Main.Config.GhostBots.LoginPrefix, mxid, c.userID, hashLen)
+		resp, err := c.api.Bots.CreateBot(ctx, connect.NewRequest(&apiv1.CreateBotRequest{
+			Login: login, DisplayName: name, ApiKeyName: &keyName,
+		}))
+		if connect.CodeOf(err) == connect.CodeAlreadyExists {
+			lastErr = err
+			continue
+		} else if err != nil {
+			return nil, fmt.Errorf("failed to create ghost bot: %w", err)
+		}
+		return &ghostBot{
+			UserID: resp.Msg.GetBot().GetUser().GetId(), Login: login,
+			APIKey: resp.Msg.GetApiKey(), Owner: c.userID, DisplayName: name,
+		}, nil
+	}
+	return nil, fmt.Errorf("failed to create ghost bot, all logins taken: %w", lastErr)
+}
+
+func (c *Connector) ghostBotFailedRecently(key ghostBotID) bool {
+	c.ghostBots.mu.Lock()
+	defer c.ghostBots.mu.Unlock()
+	at, ok := c.ghostBots.failures[key]
+	return ok && time.Since(at) < ghostBotRetryAfter
+}
+
+func (c *Connector) recordGhostBotFailure(key ghostBotID) {
+	c.ghostBots.mu.Lock()
+	defer c.ghostBots.mu.Unlock()
+	if c.ghostBots.failures == nil {
+		c.ghostBots.failures = make(map[ghostBotID]time.Time)
+	}
+	c.ghostBots.failures[key] = time.Now()
+}
+
+// sanitizeDisplayName drops control and format characters, which Chatto
+// rejects in display names, except the joiners emoji sequences need.
+func sanitizeDisplayName(name string) string {
+	return strings.TrimSpace(strings.Map(func(r rune) rune {
+		if r == '\u200C' || r == '\u200D' || (r >= '\U000E0020' && r <= '\U000E007F') {
+			return r
+		}
+		if unicode.Is(unicode.Cc, r) || unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, name))
 }

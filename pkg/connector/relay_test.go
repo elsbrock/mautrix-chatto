@@ -123,16 +123,16 @@ func TestGhostBotLogin(t *testing.T) {
 		"@averyveryverylongusernamethatgoesonandon:x": "mx-averyveryverylongusern",
 	}
 	for mxid, prefix := range tests {
-		got := ghostBotLogin("mx-", mxid)
+		got := ghostBotLogin("mx-", mxid, "Uowner", 4)
 		if !strings.HasPrefix(got, prefix) || len(got) > 32 || len(got) < 2 {
 			t.Errorf("ghostBotLogin(%s) = %q, want prefix %q and length ≤ 32", mxid, got, prefix)
 		}
-		if again := ghostBotLogin("mx-", mxid); again != got {
+		if again := ghostBotLogin("mx-", mxid, "Uowner", 4); again != got {
 			t.Errorf("not deterministic: %q vs %q", got, again)
 		}
 	}
-	if ghostBotLogin("mx-", "@a:x") == ghostBotLogin("mx-", "@a:y") {
-		t.Error("different users must not share a login")
+	if ghostBotLogin("mx-", "@a:x", "o", 4) == ghostBotLogin("mx-", "@a:y", "o", 4) || ghostBotLogin("mx-", "@a:x", "o", 4) == ghostBotLogin("mx-", "@a:x", "p", 4) {
+		t.Error("different users or owners must not share a login")
 	}
 }
 
@@ -169,5 +169,36 @@ func TestGhostBotsFallBackToPrefixWithBotRelay(t *testing.T) {
 	})
 	if len(h.srv.Bots()) != 1 {
 		t.Fatal("a bot relay must not create ghost bots")
+	}
+}
+
+func TestSanitizeDisplayName(t *testing.T) {
+	tests := map[string]string{
+		"Carol":          "Carol",
+		"Ev\u202eil":     "Evil",
+		"  spaced \x00 ": "spaced",
+		"👩\u200d💻 dev":   "👩\u200d💻 dev",
+	}
+	for in, want := range tests {
+		if got := sanitizeDisplayName(in); got != want {
+			t.Errorf("sanitizeDisplayName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestGhostBotLoginCollisionRetries(t *testing.T) {
+	w := newWorld(t, withGhostBots())
+	roomID := w.setRelay(t)
+	// Someone squats the login the bridge would pick first.
+	squatted := ghostBotLogin("mx-", carolMXID, w.alice.ID, 4)
+	w.srv.AddUser(squatted, "Squatter", "pw")
+	w.sendMatrix(roomID, carolMXID, event.EventMessage, &event.MessageEventContent{MsgType: event.MsgText, Body: "still me"})
+	msg := w.waitChatto(t, func(m *chattotest.Message) bool { return m.Body == "still me" })
+	bots := w.srv.Bots()
+	if len(bots) != 1 || msg.ActorID != bots[0].ID || bots[0].Login == squatted {
+		t.Fatalf("bots %+v, message by %s", bots, msg.ActorID)
+	}
+	if want := ghostBotLogin("mx-", carolMXID, w.alice.ID, 8); bots[0].Login != want {
+		t.Fatalf("bot login %q, want %q", bots[0].Login, want)
 	}
 }

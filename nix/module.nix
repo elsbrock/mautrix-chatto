@@ -15,6 +15,75 @@ let
   optOneOf = lib.lists.findFirst (value: value.condition) (lib.mkIf false null);
   mkDefaults = lib.mapAttrsRecursive (_: v: lib.mkDefault v);
 
+  # host:port, with IPv6 addresses bracketed.
+  metricsListen =
+    let
+      addr = cfg.metrics.listenAddress;
+    in
+    "${if lib.hasInfix ":" addr then "[${addr}]" else addr}:${toString cfg.metrics.port}";
+
+  # The client listener of a local Synapse, as an address the bridge can use.
+  synapseAddress =
+    let
+      listeners = config.services.matrix-synapse.settings.listeners or [ ];
+      isClient =
+        l: (l.port or null) != null && lib.any (r: lib.elem "client" (r.names or [ ])) (l.resources or [ ]);
+      listener = lib.findFirst isClient null listeners;
+      binds = if listener == null then [ ] else listener.bind_addresses or [ ];
+      v6only =
+        lib.elem "::1" binds
+        && !(lib.any (b: lib.elem b binds) [
+          "127.0.0.1"
+          "0.0.0.0"
+          "::"
+        ]);
+    in
+    if listener == null then
+      null
+    else
+      "http://${if v6only then "[::1]" else "127.0.0.1"}:${toString listener.port}";
+
+  # Renders config.yaml from settings and the environment file, and creates
+  # the registration on first run. Shared by the bridge and the oneshot that
+  # runs before the homeserver.
+  renderConfig = pkgs.writeShellScript "mautrix-chatto-render-config" ''
+    set -eu
+    test -f '${settingsFile}' && rm -f '${settingsFile}'
+    old_umask=$(umask)
+    umask 0177
+    ${pkgs.envsubst}/bin/envsubst -o '${settingsFile}' -i '${settingsFileUnsubstituted}'
+    umask $old_umask
+
+    if [ ! -f '${registrationFile}' ]; then
+      ${lib.getExe cfg.package} \
+        --generate-registration \
+        --config='${settingsFile}' \
+        --registration='${registrationFile}'
+    fi
+    chmod 640 '${registrationFile}'
+
+    umask 0177
+    ${pkgs.yq}/bin/yq -s '.[0].appservice.as_token = .[1].as_token
+      | .[0].appservice.hs_token = .[1].hs_token
+      | .[0]
+      | if env.MAUTRIX_CHATTO_DOUBLE_PUPPET_SECRET then .double_puppet.secrets.[.homeserver.domain] = env.MAUTRIX_CHATTO_DOUBLE_PUPPET_SECRET else . end' \
+      '${settingsFile}' '${registrationFile}' > '${settingsFile}.tmp'
+    mv '${settingsFile}.tmp' '${settingsFile}'
+    umask $old_umask
+  '';
+
+  commonServiceConfig = {
+    User = "mautrix-chatto";
+    Group = "mautrix-chatto";
+    EnvironmentFile = lib.mkIf (cfg.environmentFile != null) cfg.environmentFile;
+    StateDirectory = baseNameOf dataDir;
+    StateDirectoryMode = "0750";
+    WorkingDirectory = dataDir;
+    # The database holds Chatto credentials; only the registration file is
+    # made group-readable (for the homeserver), explicitly.
+    UMask = "0077";
+  };
+
   defaultConfig = {
     network = {
       server_url = "";
@@ -27,7 +96,7 @@ let
       strict_server_version = false;
       metrics = {
         enabled = cfg.metrics.enable;
-        listen = "${cfg.metrics.listenAddress}:${toString cfg.metrics.port}";
+        listen = metricsListen;
       };
     };
     bridge = {
@@ -81,11 +150,16 @@ in
       apply = lib.recursiveUpdate defaultConfig;
       type = settingsFormat.type;
       default = defaultConfig;
+      defaultText = lib.literalMD "the module's defaults (see `nix/module.nix`)";
       description = ''
         {file}`config.yaml` as a Nix attribute set, merged over the module's
         defaults. See `mautrix-chatto -e -c example.yaml` for every option.
         Put secrets in {option}`environmentFile` and reference them as
         `$VARIABLE`; the file is rendered with envsubst at startup.
+
+        Defaults are merged recursively, so keys can be overridden but not
+        removed: the default `bridge.permissions."*" = "relay"` stays unless
+        you set `"*"` to something else (e.g. `"block"`).
       '';
       example = lib.literalExpression ''
         {
@@ -197,14 +271,35 @@ in
     };
     systemd.services.matrix-synapse = lib.mkIf cfg.registerToSynapse {
       serviceConfig.SupplementaryGroups = [ "mautrix-chatto" ];
+      # Synapse refuses to start if a configured registration file is missing.
+      wants = [ "mautrix-chatto-registration.service" ];
+      after = [ "mautrix-chatto-registration.service" ];
+    };
+
+    # Creates the registration before the homeserver starts, without
+    # depending on it (the bridge itself starts after the homeserver).
+    systemd.services.mautrix-chatto-registration = {
+      description = "Generate the mautrix-chatto appservice registration";
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = commonServiceConfig // {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = renderConfig;
+      };
+      restartTriggers = [ settingsFileUnsubstituted ];
     };
 
     services.mautrix-chatto.settings.homeserver = optOneOf (
       with config.services;
       [
-        (lib.mkIf matrix-synapse.enable (mkDefaults {
-          domain = matrix-synapse.settings.server_name;
-        }))
+        (lib.mkIf matrix-synapse.enable (
+          mkDefaults (
+            {
+              domain = matrix-synapse.settings.server_name;
+            }
+            // lib.optionalAttrs (synapseAddress != null) { address = synapseAddress; }
+          )
+        ))
         (lib.mkIf matrix-conduit.enable (mkDefaults {
           domain = matrix-conduit.settings.global.server_name;
           address = "http://localhost:${toString matrix-conduit.settings.global.port}";
@@ -216,7 +311,7 @@ in
       {
         job_name = "mautrix-chatto";
         static_configs = [
-          { targets = [ "${cfg.metrics.listenAddress}:${toString cfg.metrics.port}" ]; }
+          { targets = [ cfg.settings.network.metrics.listen ]; }
         ];
       }
     ];
@@ -226,42 +321,21 @@ in
     systemd.services.mautrix-chatto = {
       description = "mautrix-chatto, a Matrix-Chatto puppeting bridge";
       wantedBy = [ "multi-user.target" ];
-      wants = [ "network-online.target" ] ++ cfg.serviceDependencies;
-      after = [ "network-online.target" ] ++ cfg.serviceDependencies;
+      wants = [
+        "network-online.target"
+        "mautrix-chatto-registration.service"
+      ]
+      ++ cfg.serviceDependencies;
+      after = [
+        "network-online.target"
+        "mautrix-chatto-registration.service"
+      ]
+      ++ cfg.serviceDependencies;
 
-      preStart = ''
-        test -f '${settingsFile}' && rm -f '${settingsFile}'
-        old_umask=$(umask)
-        umask 0177
-        ${pkgs.envsubst}/bin/envsubst -o '${settingsFile}' -i '${settingsFileUnsubstituted}'
-        umask $old_umask
+      preStart = toString renderConfig;
 
-        if [ ! -f '${registrationFile}' ]; then
-          ${lib.getExe cfg.package} \
-            --generate-registration \
-            --config='${settingsFile}' \
-            --registration='${registrationFile}'
-        fi
-        chmod 640 '${registrationFile}'
-
-        umask 0177
-        ${pkgs.yq}/bin/yq -s '.[0].appservice.as_token = .[1].as_token
-          | .[0].appservice.hs_token = .[1].hs_token
-          | .[0]
-          | if env.MAUTRIX_CHATTO_DOUBLE_PUPPET_SECRET then .double_puppet.secrets.[.homeserver.domain] = env.MAUTRIX_CHATTO_DOUBLE_PUPPET_SECRET else . end' \
-          '${settingsFile}' '${registrationFile}' > '${settingsFile}.tmp'
-        mv '${settingsFile}.tmp' '${settingsFile}'
-        umask $old_umask
-      '';
-
-      serviceConfig = {
+      serviceConfig = commonServiceConfig // {
         Type = "simple";
-        User = "mautrix-chatto";
-        Group = "mautrix-chatto";
-        EnvironmentFile = lib.mkIf (cfg.environmentFile != null) cfg.environmentFile;
-        StateDirectory = baseNameOf dataDir;
-        StateDirectoryMode = "0750";
-        WorkingDirectory = dataDir;
         ExecStart = "${lib.getExe cfg.package} --config='${settingsFile}' --registration='${registrationFile}' --no-update";
         Restart = "on-failure";
         RestartSec = "30s";
@@ -299,7 +373,6 @@ in
           "@system-service"
           "~@privileged"
         ];
-        UMask = "0027";
       };
       restartTriggers = [ settingsFileUnsubstituted ];
     };

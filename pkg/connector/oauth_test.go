@@ -3,8 +3,10 @@ package connector
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,6 +40,10 @@ func TestOAuthLogin(t *testing.T) {
 	if doc["client_id"] != h.conn.oauthClientID() || doc["token_endpoint_auth_method"] != "none" {
 		t.Fatalf("metadata document %+v", doc)
 	}
+	// Chatto rejects documents whose client_uri is on another origin.
+	if cu, _ := url.Parse(doc["client_uri"].(string)); cu.Scheme+"://"+cu.Host != h.conn.publicAddress() {
+		t.Fatalf("client_uri %v is not on the client_id's origin", doc["client_uri"])
+	}
 
 	user, _ := h.br.GetUserByMXID(h.ctx, aliceMXID)
 	proc, err := h.conn.CreateLogin(h.ctx, user, LoginFlowOAuth)
@@ -61,11 +67,21 @@ func TestOAuthLogin(t *testing.T) {
 		UserID: alice.ID, Challenge: q.Get("code_challenge"),
 		ClientID: q.Get("client_id"), RedirectURI: q.Get("redirect_uri"),
 	})
+	// The redirect shows a confirmation naming the Matrix account; linking
+	// only happens on the POST.
+	cb, err := http.Get(q.Get("redirect_uri") + "?" + url.Values{"code": {code}, "state": {q.Get("state")}}.Encode())
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, _ := io.ReadAll(cb.Body)
+	_ = cb.Body.Close()
+	if !strings.Contains(string(page), string(aliceMXID)) || !strings.Contains(string(page), `method="post"`) {
+		t.Fatalf("confirmation page does not name the Matrix account: %s", page)
+	}
 	go func() {
-		time.Sleep(50 * time.Millisecond)
-		cb, _ := http.Get(q.Get("redirect_uri") + "?" + url.Values{"code": {code}, "state": {q.Get("state")}}.Encode())
-		if cb != nil {
-			_ = cb.Body.Close()
+		resp, err := http.PostForm(q.Get("redirect_uri"), url.Values{"code": {code}, "state": {q.Get("state")}})
+		if err == nil {
+			_ = resp.Body.Close()
 		}
 	}()
 	ctx, cancel := context.WithTimeout(h.ctx, 10*time.Second)
@@ -83,7 +99,7 @@ func TestOAuthLogin(t *testing.T) {
 
 func TestOAuthCallbackRejectsUnknownState(t *testing.T) {
 	h := newHarness(t, withPublicRouter())
-	resp, err := http.Get(h.conn.oauthRedirectURI() + "?code=x&state=nope")
+	resp, err := http.PostForm(h.conn.oauthRedirectURI(), url.Values{"code": {"x"}, "state": {"nope"}})
 	if err != nil {
 		t.Fatal(err)
 	}

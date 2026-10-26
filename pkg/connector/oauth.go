@@ -52,10 +52,19 @@ type oauthResult struct {
 	err  error
 }
 
+// oauthPending is one authorization waiting for its callback.
+type oauthPending struct {
+	result chan oauthResult
+	// mxid is the Matrix user that will receive the Chatto session. The
+	// callback page names it so that someone who was sent another user's
+	// sign-in link can see who they would be linking their account to.
+	mxid string
+}
+
 // oauthState tracks pending authorizations by their state parameter.
 type oauthState struct {
 	mu      sync.Mutex
-	pending map[string]chan oauthResult
+	pending map[string]*oauthPending
 }
 
 // publicAddress returns the bridge's public HTTPS address, or "".
@@ -89,18 +98,20 @@ func (c *Connector) registerOAuthRoutes() {
 	if router == nil {
 		return
 	}
-	c.oauth.pending = make(map[string]chan oauthResult)
+	c.oauth.pending = make(map[string]*oauthPending)
 	router.HandleFunc("GET "+oauthMetadataPath, c.serveOAuthMetadata)
-	router.HandleFunc("GET "+oauthCallbackPath, c.serveOAuthCallback)
+	router.HandleFunc("GET "+oauthCallbackPath, c.serveOAuthConfirm)
+	router.HandleFunc("POST "+oauthCallbackPath, c.serveOAuthCallback)
 }
 
 func (c *Connector) serveOAuthMetadata(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"client_id":                  c.oauthClientID(),
-		"client_name":                "Matrix bridge (mautrix-chatto)",
-		"client_uri":                 "https://github.com/elsbrock/matrix-chatto-bridge",
+		"client_id":   c.oauthClientID(),
+		"client_name": "Matrix bridge (mautrix-chatto)",
+		// Chatto requires client_uri to share the client_id's origin.
+		"client_uri":                 c.publicAddress(),
 		"redirect_uris":              []string{c.oauthRedirectURI()},
 		"grant_types":                []string{"authorization_code", "refresh_token"},
 		"response_types":             []string{"code"},
@@ -109,29 +120,66 @@ func (c *Connector) serveOAuthMetadata(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func (c *Connector) serveOAuthCallback(w http.ResponseWriter, r *http.Request) {
+// serveOAuthConfirm is the redirect target. It does not complete the login
+// on GET: it asks the person to confirm which Matrix account receives their
+// Chatto session, then posts back.
+func (c *Connector) serveOAuthConfirm(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	state := q.Get("state")
 	c.oauth.mu.Lock()
-	ch, ok := c.oauth.pending[state]
-	delete(c.oauth.pending, state)
+	p, ok := c.oauth.pending[state]
 	c.oauth.mu.Unlock()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; form-action 'self'; style-src 'unsafe-inline'")
+	w.Header().Set("X-Frame-Options", "DENY")
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = fmt.Fprint(w, "<p>This sign-in link is unknown or expired. Start a new login from Matrix.</p>")
 		return
 	}
-	result := oauthResult{code: q.Get("code")}
-	if e := q.Get("error"); e != "" || result.code == "" {
-		result.err = fmt.Errorf("%w: %s", errors.New(ErrOAuthDenied.Err), html.EscapeString(e))
-	}
-	ch <- result
-	if result.err != nil {
+	if e := q.Get("error"); e != "" || q.Get("code") == "" {
+		c.finishOAuth(state, oauthResult{err: errors.New(ErrOAuthDenied.Err)})
 		_, _ = fmt.Fprint(w, "<p>Sign-in was not completed. You can close this tab.</p>")
 		return
 	}
-	_, _ = fmt.Fprint(w, "<p>Signed in to Chatto. You can close this tab and return to Matrix.</p>")
+	_, _ = fmt.Fprintf(w, `<!doctype html><meta charset="utf-8"><title>Link Chatto account</title>
+<body style="font-family:sans-serif;max-width:32em;margin:3em auto">
+<h1>Link your Chatto account?</h1>
+<p>Your Chatto account will be bridged to the Matrix account <strong>%s</strong>.
+Only continue if that is you.</p>
+<form method="post"><input type="hidden" name="state" value="%s"><input type="hidden" name="code" value="%s">
+<button type="submit">Link account</button></form></body>`,
+		html.EscapeString(p.mxid), html.EscapeString(state), html.EscapeString(q.Get("code")))
+}
+
+func (c *Connector) serveOAuthCallback(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if !c.finishOAuth(r.PostForm.Get("state"), oauthResult{code: r.PostForm.Get("code")}) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = fmt.Fprint(w, "<p>This sign-in link is unknown or expired. Start a new login from Matrix.</p>")
+		return
+	}
+	_, _ = fmt.Fprint(w, "<p>Linked. You can close this tab and return to Matrix.</p>")
+}
+
+// finishOAuth delivers a result to the pending login, once.
+func (c *Connector) finishOAuth(state string, res oauthResult) bool {
+	c.oauth.mu.Lock()
+	p, ok := c.oauth.pending[state]
+	delete(c.oauth.pending, state)
+	c.oauth.mu.Unlock()
+	if !ok {
+		return false
+	}
+	if res.err == nil && res.code == "" {
+		res.err = errors.New(ErrOAuthDenied.Err)
+	}
+	p.result <- res
+	return true
 }
 
 // OAuthLogin is the browser-based login flow.
@@ -175,13 +223,13 @@ func (o *OAuthLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 	o.verifier = randomToken(48)
 	o.result = make(chan oauthResult, 1)
 	o.Main.oauth.mu.Lock()
-	o.Main.oauth.pending[o.state] = o.result
+	o.Main.oauth.pending[o.state] = &oauthPending{result: o.result, mxid: string(o.User.MXID)}
 	o.Main.oauth.mu.Unlock()
 	link := o.AuthorizeURL()
 	return &bridgev2.LoginStep{
 		Type:         bridgev2.LoginStepTypeDisplayAndWait,
 		StepID:       loginStepOAuth,
-		Instructions: "Open this link, sign in to Chatto and approve the bridge:\n\n" + link,
+		Instructions: fmt.Sprintf("Open this link, sign in to Chatto and approve linking it to %s:\n\n%s", o.User.MXID, link),
 		DisplayAndWaitParams: &bridgev2.LoginDisplayAndWaitParams{
 			Type:      bridgev2.LoginDisplayTypeCode,
 			Data:      link,

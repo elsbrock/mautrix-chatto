@@ -98,7 +98,13 @@ func convertLink(text, href string) string {
 		}
 		return href
 	}
-	return fmt.Sprintf("[%s](%s)", strings.ReplaceAll(text, "]", ")"), href)
+	return fmt.Sprintf("[%s](%s)", strings.ReplaceAll(text, "]", ")"), markdownDestination(href))
+}
+
+// markdownDestination percent-encodes characters that would end a Markdown
+// link destination early.
+func markdownDestination(href string) string {
+	return strings.NewReplacer(" ", "%20", "(", "%28", ")", "%29", "<", "%3C", ">", "%3E").Replace(href)
 }
 
 func convertPill(ctx context.Context, opts *FromMatrixOptions, displayname, mxid, eventID string, fctx format.Context) string {
