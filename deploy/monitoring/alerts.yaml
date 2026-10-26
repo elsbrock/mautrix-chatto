@@ -12,49 +12,49 @@ groups:
           description: Prometheus could not scrape {{ $labels.instance }} for 5 minutes.
 
       - alert: MautrixChattoRealtimeDisconnected
-        expr: sum by (instance) (mautrix_chatto_logins{state="CONNECTED"}) > sum by (instance) (mautrix_chatto_realtime_connected)
+        expr: sum by (instance, server) (mautrix_chatto_logins{state="CONNECTED"}) > sum by (instance, server) (mautrix_chatto_realtime_connected)
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: A Chatto login has no realtime connection
-          description: Some logins on {{ $labels.instance }} report connected but their realtime socket has been down for 10 minutes.
+          description: Some logins to Chatto server {{ $labels.server }} on {{ $labels.instance }} report connected but their realtime socket has been down for 10 minutes.
 
       - alert: MautrixChattoBadCredentials
-        expr: sum by (instance) (mautrix_chatto_logins{state=~"BAD_CREDENTIALS|LOGGED_OUT"}) > 0
+        expr: sum by (instance, server) (mautrix_chatto_logins{state=~"BAD_CREDENTIALS|LOGGED_OUT"}) > 0
         for: 15m
         labels:
           severity: warning
         annotations:
           summary: A Chatto login needs to log in again
-          description: "{{ $value }} login(s) on {{ $labels.instance }} were signed out by Chatto."
+          description: "{{ $value }} login(s) to Chatto server {{ $labels.server }} on {{ $labels.instance }} were signed out by Chatto."
 
       - alert: MautrixChattoReconnectStorm
-        expr: sum by (instance) (rate(mautrix_chatto_realtime_reconnects_total[10m])) * 600 > 10
+        expr: sum by (instance, server) (rate(mautrix_chatto_realtime_reconnects_total[10m])) * 600 > 10
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: Realtime connection is flapping
-          description: More than 10 realtime reconnects in 10 minutes on {{ $labels.instance }}.
+          description: More than 10 realtime reconnects to Chatto server {{ $labels.server }} in 10 minutes on {{ $labels.instance }}.
 
       - alert: MautrixChattoHighEventLag
-        expr: histogram_quantile(0.95, sum by (le, instance) (rate(mautrix_chatto_realtime_event_lag_seconds_bucket[10m]))) > 30
+        expr: histogram_quantile(0.95, sum by (le, instance, server) (rate(mautrix_chatto_realtime_event_lag_seconds_bucket[10m]))) > 30
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: Chatto events arrive late
-          description: The p95 delay between event creation and receipt is above 30 seconds on {{ $labels.instance }}.
+          description: The p95 delay between event creation on Chatto server {{ $labels.server }} and receipt is above 30 seconds on {{ $labels.instance }}.
 
       - alert: MautrixChattoBridgeErrors
-        expr: sum by (instance, direction) (rate(mautrix_chatto_bridge_errors_total[15m])) > 0.05
+        expr: sum by (instance, server, direction) (rate(mautrix_chatto_bridge_errors_total[15m])) > 0.05
         for: 15m
         labels:
           severity: warning
         annotations:
           summary: Messages are failing to bridge
-          description: Events in direction {{ $labels.direction }} fail at {{ $value | humanize }}/s on {{ $labels.instance }}.
+          description: Events in direction {{ $labels.direction }} for Chatto server {{ $labels.server }} fail at {{ $value | humanize }}/s on {{ $labels.instance }}.
 
       - alert: MautrixChattoRPCErrors
         expr: |
