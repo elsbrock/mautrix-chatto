@@ -328,6 +328,7 @@ func (c *ChattoClient) downloadPublic(ctx context.Context, rawURL string, maxSiz
 	if err != nil {
 		return nil, fmt.Errorf("invalid download URL %s", redactURL(rawURL))
 	}
+	req.Header.Set("User-Agent", c.Main.userAgent())
 	resp, err := c.api.HTTP().Do(req)
 	if err != nil {
 		var uerr *url.Error
