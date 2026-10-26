@@ -12,9 +12,9 @@ your Matrix homeserver:
 - Messages, edits, deletions, reactions, replies, threads, attachments,
   typing, read state and presence flow both ways.
 
-> **Status:** feature-complete against Chatto `v0.5.0-beta.21`. It is tested
-> against an in-memory fake of Chatto's API and a mock homeserver, but has not
-> been run against a real Chatto server yet.
+> **Status:** feature-complete against Chatto `v0.5.0-beta.21` and running
+> against a live Chatto server. The test suite runs against an in-memory fake
+> of Chatto's API and a mock homeserver.
 
 ## Features
 
