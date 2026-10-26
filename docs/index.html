@@ -197,8 +197,9 @@ The <a href="https://github.com/elsbrock/mautrix-chatto#features">README</a> has
 <h2 id="install">Install</h2>
 
 <h3>NixOS</h3>
-<p>The flake ships a package, an overlay and a NixOS module. With Synapse on the
-same host, the appservice registration is wired up for you.</p>
+<p>The flake ships a package, an overlay and a NixOS module. The module writes the
+registration file to <code>/var/lib/mautrix-chatto/chatto-registration.yaml</code>
+(see <a href="#register">below</a>).</p>
 <pre><code>{
   inputs.mautrix-chatto.url = "github:elsbrock/mautrix-chatto";
 
@@ -235,9 +236,6 @@ same host, the appservice registration is wired up for you.</p>
 $EDITOR config.yaml                              <span class="c"># network.servers, homeserver.*, bridge.permissions</span>
 ./result/bin/mautrix-chatto -g -c config.yaml -r registration.yaml
 ./result/bin/mautrix-chatto -c config.yaml -r registration.yaml</code></pre>
-<p>Then register <code>registration.yaml</code> with your homeserver. For Synapse,
-add it to <code>app_service_config_files</code>. For tuwunel or conduwuit, send
-<code>!admin appservices register</code> in the admin room, followed by the YAML in a code block.</p>
 
 <h3>Container</h3>
 <pre><code>nix build github:elsbrock/mautrix-chatto#docker &amp;&amp; docker load &lt; result
@@ -245,6 +243,25 @@ docker run --rm -v $PWD/data:/data mautrix-chatto -e -c /data/config.yaml
 <span class="c"># set appservice.hostname to 0.0.0.0 in data/config.yaml, then:</span>
 docker run --rm -v $PWD/data:/data mautrix-chatto -g -c /data/config.yaml -r /data/registration.yaml
 docker run -d -v $PWD/data:/data -p 29340:29340 mautrix-chatto</code></pre>
+
+<h3 id="register">Connect it to your homeserver</h3>
+<p>The bridge runs next to your homeserver as an <em>appservice</em>. The homeserver
+forwards it the events for bridged rooms and lets it act as the <code>@chatto_…</code>
+users. The two trust each other through a registration file that the bridge generates.
+It holds two shared tokens, the bridge's address and the user names the bridge owns.
+You load that file into your homeserver once.</p>
+<p><strong>tuwunel or conduwuit:</strong> open the admin room (<code>#admins:example.com</code>)
+and send this message, with the whole content of the registration file between the fences:</p>
+<pre><code>!admin appservices register
+```
+id: chatto
+as_token: …
+hs_token: …
+<span class="c"># …rest of the file</span>
+```</code></pre>
+<p>The server confirms in the admin room. Then start the bridge.</p>
+<p><strong>Synapse:</strong> add the file to <code>app_service_config_files</code> and
+restart Synapse. The NixOS module does this for you when Synapse runs on the same host.</p>
 
 <p>The annotated <a href="https://github.com/elsbrock/mautrix-chatto/blob/main/example-config.yaml">example-config.yaml</a>
 covers every option. The Chatto-specific part is the <code>network:</code> section.</p>
