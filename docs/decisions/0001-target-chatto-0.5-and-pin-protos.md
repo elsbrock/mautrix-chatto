@@ -16,6 +16,12 @@ and typed close frames. The two are not compatible.
 - Check the server version at startup with semver. An older server is logged,
   or refused when `network.strict_server_version` is true. Non-semver versions
   (dev builds) are accepted.
+- `proto/chatto/realtime/v1` declares no service, only the frames sent over
+  the `/api/realtime` WebSocket, so buf generates message types for it and no
+  connect-go client. `pkg/chattoclient/realtime.go` is the realtime client,
+  and `pkg/chattotest/realtime.go` is its scriptable fake. The operator
+  package does have a service and gets a client too, though the bridge does
+  not call it.
 
 ## Consequences
 0.4 servers are not supported. Upgrading to a newer Chatto means running
