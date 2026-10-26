@@ -2,9 +2,11 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"connectrpc.com/connect"
@@ -255,19 +257,24 @@ func (c *ChattoClient) userToUserInfo(user *apiv1.User) *bridgev2.UserInfo {
 }
 
 // downloadPublic fetches a URL that needs no credentials (avatars, signed
-// asset URLs), following redirects, with a size cap.
-func (c *ChattoClient) downloadPublic(ctx context.Context, url string, maxSize int64) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+// asset URLs), following redirects, with a size cap. Errors never include
+// the query string, which carries Chatto access tickets.
+func (c *ChattoClient) downloadPublic(ctx context.Context, rawURL string, maxSize int64) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid download URL %s", redactURL(rawURL))
 	}
 	resp, err := c.api.HTTP().Do(req)
 	if err != nil {
+		var uerr *url.Error
+		if errors.As(err, &uerr) {
+			return nil, fmt.Errorf("downloading %s: %w", redactURL(rawURL), uerr.Err)
+		}
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected HTTP %d downloading %s", resp.StatusCode, redactURL(url))
+		return nil, fmt.Errorf("unexpected HTTP %d downloading %s", resp.StatusCode, redactURL(rawURL))
 	}
 	if maxSize > 0 && resp.ContentLength > maxSize {
 		return nil, fmt.Errorf("file too large (%d bytes)", resp.ContentLength)
@@ -278,7 +285,7 @@ func (c *ChattoClient) downloadPublic(ctx context.Context, url string, maxSize i
 	}
 	data, err := io.ReadAll(reader)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("downloading %s: %w", redactURL(rawURL), err)
 	}
 	if maxSize > 0 && int64(len(data)) > maxSize {
 		return nil, fmt.Errorf("file too large")

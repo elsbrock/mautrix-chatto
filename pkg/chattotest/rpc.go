@@ -128,7 +128,8 @@ func (s *Server) messageProtoLocked(m *Message, viewer string) *apiv1.Message {
 		})
 	}
 	if replies := s.threads[m.ID]; len(replies) > 0 {
-		p.Thread = &apiv1.ThreadSummary{ThreadRootEventId: m.ID, ReplyCount: int32(len(replies))}
+		last := s.messages[replies[len(replies)-1]]
+		p.Thread = &apiv1.ThreadSummary{ThreadRootEventId: m.ID, ReplyCount: int32(len(replies)), LastReplyAt: ts(last.CreatedAt)}
 	}
 	return p
 }
@@ -720,6 +721,10 @@ func (ms *messageService) DeleteAttachment(ctx context.Context, req *connect.Req
 }
 
 func (ms *messageService) GetMessage(ctx context.Context, req *connect.Request[apiv1.GetMessageRequest]) (*connect.Response[apiv1.GetMessageResponse], error) {
+	if ms.s.FailGetMessage.Load() > 0 {
+		ms.s.FailGetMessage.Add(-1)
+		return nil, connect.NewError(connect.CodeUnavailable, errors.New("injected failure"))
+	}
 	ms.s.mu.Lock()
 	defer ms.s.mu.Unlock()
 	m, ok := ms.s.messages[req.Msg.GetEventId()]

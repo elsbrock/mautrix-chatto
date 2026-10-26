@@ -28,8 +28,10 @@ const realtimePath = "/api/realtime"
 // from the read loop; a slow handler delays later events, which is intended:
 // cursors only advance after their event was handled.
 type RealtimeHandler interface {
-	// HandleEvent processes one authorized event.
-	HandleEvent(ctx context.Context, evt *realtimev1.RealtimeEvent)
+	// HandleEvent processes one authorized event. A returned error means the
+	// event could not be handled for a transient reason: the cursor is not
+	// advanced and the subscription reconnects, so the event is replayed.
+	HandleEvent(ctx context.Context, evt *realtimev1.RealtimeEvent) error
 	// HandleSnapshot receives the server's bounded state snapshot, sent when
 	// a subscription could not resume.
 	HandleSnapshot(ctx context.Context, snapshot *realtimev1.RealtimeSnapshot)
@@ -72,6 +74,24 @@ func (s RealtimeState) String() string {
 
 // ErrRealtimeFatal wraps close reasons after which reconnecting is pointless.
 var ErrRealtimeFatal = errors.New("chatto realtime: fatal close")
+
+// IsCredentialError reports whether a fatal realtime error means the login's
+// credentials are no longer valid (as opposed to e.g. a protocol mismatch).
+func IsCredentialError(err error) bool {
+	if errors.Is(err, ErrSessionRevoked) || errors.Is(err, errBadCredentials) {
+		return true
+	}
+	var closeErr *CloseError
+	if errors.As(err, &closeErr) {
+		switch closeErr.Code {
+		case realtimev1.RealtimeCloseCode_REALTIME_CLOSE_CODE_AUTHENTICATION_REQUIRED,
+			realtimev1.RealtimeCloseCode_REALTIME_CLOSE_CODE_SESSION_RENEWAL_REQUIRED,
+			realtimev1.RealtimeCloseCode_REALTIME_CLOSE_CODE_SESSION_TERMINATED:
+			return true
+		}
+	}
+	return false
+}
 
 // CloseError describes a server-requested close.
 type CloseError struct {
@@ -197,6 +217,8 @@ func (r *Realtime) Run(ctx context.Context) error {
 			return fmt.Errorf("%w: %w", ErrRealtimeFatal, err)
 		case errors.Is(err, errHeartbeatTimeout):
 			reason = "heartbeat_timeout"
+		case errors.Is(err, errHandlerFailed):
+			reason = "handler_error"
 		}
 		bridgemetrics.RealtimeReconnects.WithLabelValues(reason).Inc()
 		r.handler.HandleState(RealtimeTransientDisconnect, err)
@@ -216,6 +238,7 @@ func (r *Realtime) Run(ctx context.Context) error {
 var (
 	errHeartbeatTimeout = errors.New("chatto realtime: heartbeat timeout")
 	errBadCredentials   = errors.New("chatto realtime: credentials rejected")
+	errHandlerFailed    = errors.New("chatto realtime: event handler failed")
 )
 
 // classifyClose decides whether a close is fatal and how long to wait.
@@ -340,7 +363,10 @@ func (r *Realtime) runOnce(ctx context.Context) (connected bool, err error) {
 		switch f := frame.Frame.(type) {
 		case *realtimev1.RealtimeServerFrame_Event:
 			r.observeEvent(f.Event)
-			r.handler.HandleEvent(ctx, f.Event)
+			if err := r.handler.HandleEvent(ctx, f.Event); err != nil {
+				_ = conn.Close(websocket.StatusNormalClosure, "retrying event")
+				return connected, fmt.Errorf("%w: %w", errHandlerFailed, err)
+			}
 			r.setCursor(f.Event.GetCursor())
 		case *realtimev1.RealtimeServerFrame_Heartbeat:
 			r.setCursor(f.Heartbeat.GetCursor())

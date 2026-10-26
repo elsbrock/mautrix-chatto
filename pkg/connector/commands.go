@@ -63,7 +63,7 @@ var cmdServerInfo = &commands.FullHandler{
 func humanLogin(ce *commands.Event) (*bridgev2.UserLogin, *ChattoClient) {
 	for _, login := range ce.User.GetUserLogins() {
 		cc, ok := login.Client.(*ChattoClient)
-		if ok && cc.api != nil && !cc.meta().IsBot {
+		if ok && cc.api != nil && !cc.isBot() {
 			return login, cc
 		}
 	}

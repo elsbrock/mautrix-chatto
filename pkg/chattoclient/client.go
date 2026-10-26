@@ -169,6 +169,16 @@ func (c *Client) ServerVersion(ctx context.Context) (string, error) {
 	return resp.Msg.GetProfile().GetVersion(), nil
 }
 
+// tokenError maps a TokenSource failure to a connect error. Only a revoked
+// session is an authentication failure; anything else (network trouble, a
+// failing token endpoint, a failed save) is transient.
+func tokenError(err error) error {
+	if errors.Is(err, ErrSessionRevoked) {
+		return connect.NewError(connect.CodeUnauthenticated, err)
+	}
+	return connect.NewError(connect.CodeUnavailable, fmt.Errorf("refreshing credentials: %w", err))
+}
+
 // interceptor adds credentials, retries once after a refreshable auth
 // failure, and records metrics.
 type interceptor struct {
@@ -184,7 +194,7 @@ func (i *interceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 			var err error
 			token, err = i.client.tokens.Token(ctx)
 			if err != nil {
-				return nil, connect.NewError(connect.CodeUnauthenticated, err)
+				return nil, tokenError(err)
 			}
 			req.Header().Set("Authorization", "Bearer "+token)
 		}

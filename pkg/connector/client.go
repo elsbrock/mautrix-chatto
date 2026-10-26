@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -36,7 +37,9 @@ type ChattoClient struct {
 	typingLock sync.Mutex
 	typing     map[networkid.PortalID]context.CancelFunc
 
-	cursorLock     sync.Mutex
+	// metaLock guards UserLogin.Metadata and serialises saves, which happen
+	// from the realtime loop, token refreshes and profile updates.
+	metaLock       sync.Mutex
 	lastCursorSave time.Time
 }
 
@@ -89,9 +92,17 @@ func (c *ChattoClient) IsLoggedIn() bool {
 // persistSession stores rotated session tokens. It is called with the
 // pending refresh ID before a refresh and with the new tokens after.
 func (c *ChattoClient) persistSession(ctx context.Context, sess chattoclient.Session) error {
-	meta := c.meta()
-	meta.Session = &sess
+	c.metaLock.Lock()
+	defer c.metaLock.Unlock()
+	c.meta().Session = &sess
 	return c.UserLogin.Save(ctx)
+}
+
+// isBot reports whether this login is a Chatto bot account.
+func (c *ChattoClient) isBot() bool {
+	c.metaLock.Lock()
+	defer c.metaLock.Unlock()
+	return c.meta().IsBot
 }
 
 func (c *ChattoClient) Connect(ctx context.Context) {
@@ -132,11 +143,21 @@ func (c *ChattoClient) Connect(ctx context.Context) {
 	go func() {
 		defer c.running.Done()
 		err := c.rt.Run(runCtx)
-		if errors.Is(err, chattoclient.ErrRealtimeFatal) {
+		switch {
+		case !errors.Is(err, chattoclient.ErrRealtimeFatal):
+		case chattoclient.IsCredentialError(err):
 			c.badCredentials(runCtx, err)
+		default:
+			// Protocol mismatch or a rejected subscription: logging in
+			// again will not help, the bridge or server needs updating.
+			c.sendState(status.BridgeState{
+				StateEvent: status.StateUnknownError,
+				Error:      "chatto-realtime-rejected",
+				Message:    fmt.Sprintf("Chatto rejected the realtime connection: %v", err),
+			})
 		}
 	}()
-	if c.Main.Config.KeepLoginsOnline && !c.meta().IsBot {
+	if c.Main.Config.KeepLoginsOnline && !c.isBot() {
 		c.running.Add(1)
 		go func() {
 			defer c.running.Done()
@@ -155,6 +176,8 @@ func (c *ChattoClient) badCredentials(ctx context.Context, err error) {
 }
 
 func (c *ChattoClient) updateRemoteProfile(ctx context.Context, user *apiv1.User) {
+	c.metaLock.Lock()
+	defer c.metaLock.Unlock()
 	changed := false
 	if c.UserLogin.RemoteProfile.Username != user.GetLogin() {
 		c.UserLogin.RemoteProfile.Username = user.GetLogin()
@@ -195,14 +218,16 @@ func (c *ChattoClient) Disconnect() {
 
 func (c *ChattoClient) LogoutRemote(ctx context.Context) {
 	c.Disconnect()
-	meta := c.meta()
-	if meta.Kind == chattoid.CredentialSession && c.tokens != nil {
-		if src, ok := c.tokens.(*chattoclient.SessionTokenSource); ok {
-			if err := c.api.Logout(ctx, src.Session()); err != nil {
-				zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to revoke Chatto session")
-			}
+	// Revoke before taking metaLock: a token refresh holds the token
+	// source's lock and then takes metaLock to persist.
+	if src, ok := c.tokens.(*chattoclient.SessionTokenSource); ok && c.api != nil {
+		if err := c.api.Logout(ctx, src.Session()); err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to revoke Chatto session")
 		}
 	}
+	c.metaLock.Lock()
+	defer c.metaLock.Unlock()
+	meta := c.meta()
 	meta.Session = nil
 	meta.BotKey = ""
 	meta.RealtimeCursor = ""

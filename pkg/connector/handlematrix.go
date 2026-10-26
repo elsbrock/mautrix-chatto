@@ -13,6 +13,7 @@ import (
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
@@ -39,9 +40,17 @@ var (
 				WithErrorAsMessage().WithIsCertain(true).WithSendNotice(true)
 	ErrMessageTooLong = bridgev2.WrapErrorInStatus(fmt.Errorf("message is longer than Chatto's %d byte limit", maxBodyLength)).
 				WithErrorAsMessage().WithIsCertain(true).WithSendNotice(true)
+	ErrNotChattoMessage = bridgev2.WrapErrorInStatus(errors.New("bridge notices only exist on Matrix")).
+				WithErrorAsMessage().WithIsCertain(true).WithSendNotice(false)
 	ErrRoomArchived = bridgev2.WrapErrorInStatus(errors.New("this room is archived on Chatto")).
 			WithErrorAsMessage().WithIsCertain(true).WithSendNotice(true)
 )
+
+// isChattoMessageID reports whether a message exists on Chatto, as opposed
+// to bridge-generated notices (call, archive) that only exist on Matrix.
+func isChattoMessageID(id networkid.MessageID) bool {
+	return !strings.HasPrefix(string(id), noticeIDPrefix)
+}
 
 func portalRoomID(portal *bridgev2.Portal) (string, error) {
 	roomID, ok := chattoRoomID(portal)
@@ -146,7 +155,7 @@ func (c *ChattoClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.Ma
 			req.InReplyTo = rootID
 		}
 	}
-	if msg.ReplyTo != nil {
+	if msg.ReplyTo != nil && isChattoMessageID(msg.ReplyTo.ID) {
 		replyID := chattoid.ParseMessageID(msg.ReplyTo.ID)
 		// In a REQUIRED-threading room, replying to a root means replying in its thread.
 		if threadsAllowed && req.ThreadRootEventId == "" && msg.ReplyTo.ThreadRoot == "" &&
@@ -217,10 +226,12 @@ func (c *ChattoClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.Ma
 		ID:        chattoid.MakeMessageID(created.GetId()),
 		SenderID:  chattoid.MakeUserID(senderID),
 		Timestamp: created.GetCreatedAt().AsTime(),
-		Metadata:  &chattoid.MessageMetadata{},
+		Metadata:  &chattoid.MessageMetadata{TextHash: chattoid.HashText(req.Body)},
 	}
-	if len(req.AttachmentAssetIds) > 0 && req.Body == "" && len(created.GetAttachments()) == 1 {
-		// A Matrix media event maps to the Chatto attachment part.
+	if len(req.AttachmentAssetIds) > 0 && len(created.GetAttachments()) == 1 {
+		// A Matrix media event (captioned or not) maps to the Chatto
+		// attachment part, so later Chatto edits never turn it into text
+		// or duplicate the file.
 		dbMsg.PartID = chattoid.MakeAttachmentPartID(created.GetAttachments()[0].GetId())
 		dbMsg.Metadata = &chattoid.MessageMetadata{AssetID: created.GetAttachments()[0].GetId()}
 	}
@@ -293,6 +304,11 @@ func (c *ChattoClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Matri
 		return wrapSendError(err)
 	}
 	bridgemetrics.MessagesBridged.WithLabelValues("to_chatto", "edit").Inc()
+	// bridgev2 saves the edit target afterwards; recording the new text keeps
+	// the realtime echo of this edit from being bridged back.
+	if meta, ok := msg.EditTarget.Metadata.(*chattoid.MessageMetadata); ok {
+		meta.TextHash = chattoid.HashText(body)
+	}
 	return nil
 }
 
@@ -327,6 +343,9 @@ func (c *ChattoClient) HandleMatrixMessageRemove(ctx context.Context, msg *bridg
 }
 
 func (c *ChattoClient) PreHandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (bridgev2.MatrixReactionPreResponse, error) {
+	if !isChattoMessageID(msg.TargetMessage.ID) {
+		return bridgev2.MatrixReactionPreResponse{}, ErrNotChattoMessage
+	}
 	shortcode, ok := emoji.ToShortcode(msg.Content.RelatesTo.Key)
 	if !ok {
 		return bridgev2.MatrixReactionPreResponse{}, ErrUnsupportedReaction
@@ -391,10 +410,15 @@ func (c *ChattoClient) HandleMatrixReadReceipt(ctx context.Context, receipt *bri
 		return err
 	}
 	req := &apiv1.MarkRoomAsReadRequest{RoomId: roomID}
-	if target != nil {
+	if target != nil && isChattoMessageID(target.ID) {
 		req.UpToEventId = chattoid.ParseMessageID(target.ID)
 	}
 	_, err = c.api.Rooms.MarkRoomAsRead(ctx, connect.NewRequest(req))
+	if req.UpToEventId != "" && (connect.CodeOf(err) == connect.CodeInvalidArgument || connect.CodeOf(err) == connect.CodeNotFound) {
+		// Thread echoes are not root messages; mark through the latest root.
+		req.UpToEventId = ""
+		_, err = c.api.Rooms.MarkRoomAsRead(ctx, connect.NewRequest(req))
+	}
 	return err
 }
 

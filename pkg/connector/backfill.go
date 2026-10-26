@@ -3,6 +3,8 @@ package connector
 import (
 	"context"
 	"fmt"
+	"slices"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/rs/zerolog"
@@ -31,26 +33,26 @@ func (c *ChattoClient) FetchMessages(ctx context.Context, params bridgev2.FetchM
 	var events []*apiv1.RoomTimelineEvent
 	var page *apiv1.RoomTimelinePage
 	if params.Forward {
-		if params.AnchorMessage == nil {
-			page, err = pager.latest(ctx)
+		// The anchor may be a thread reply, an echo or a bridge notice,
+		// none of which the room timeline can page around. Walk back from
+		// the newest event to the anchor's timestamp instead.
+		var since time.Time
+		if params.AnchorMessage != nil {
+			since = params.AnchorMessage.Timestamp
+		}
+		events, page, err = pager.since(ctx, since, max(params.Count, 1))
+		if err != nil {
+			return nil, err
+		}
+		if threadRoot == "" && params.AnchorMessage != nil {
+			replies, err := c.missedThreadReplies(ctx, roomID, page, events, since)
 			if err != nil {
-				return nil, err
+				zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to fetch missed thread replies")
 			}
-			events = page.GetEvents()
-		} else {
-			anchorID := chattoid.ParseMessageID(params.AnchorMessage.ID)
-			page, err = pager.around(ctx, anchorID)
-			if err != nil {
-				return nil, err
-			}
-			events = eventsAfter(page.GetEvents(), anchorID)
-			for i := 0; page.GetHasNewer() && i < maxForwardPages && len(events) < params.Count; i++ {
-				page, err = pager.after(ctx, page.GetEndCursor())
-				if err != nil {
-					return nil, err
-				}
-				events = append(events, page.GetEvents()...)
-			}
+			events = append(events, replies...)
+			slices.SortStableFunc(events, func(a, b *apiv1.RoomTimelineEvent) int {
+				return a.GetCreatedAt().AsTime().Compare(b.GetCreatedAt().AsTime())
+			})
 		}
 	} else {
 		switch {
@@ -64,6 +66,9 @@ func (c *ChattoClient) FetchMessages(ctx context.Context, params bridgev2.FetchM
 			page, err = pager.around(ctx, anchorID)
 			if err == nil {
 				events = eventsBefore(page.GetEvents(), anchorID)
+			} else if connect.CodeOf(err) == connect.CodeNotFound || connect.CodeOf(err) == connect.CodeInvalidArgument {
+				// Not a room-timeline root (e.g. a notice): page back by time.
+				events, page, err = pager.olderThan(ctx, params.AnchorMessage.Timestamp)
 			}
 		default:
 			page, err = pager.latest(ctx)
@@ -143,24 +148,23 @@ func (p *timelinePager) before(ctx context.Context, cursor string) (*apiv1.RoomT
 	return resp.Msg.GetPage(), nil
 }
 
-func (p *timelinePager) after(ctx context.Context, cursor string) (*apiv1.RoomTimelinePage, error) {
-	if p.threadRoot != "" {
-		resp, err := p.c.api.Threads.GetThreadEvents(ctx, connect.NewRequest(&apiv1.GetThreadEventsRequest{
-			RoomId: p.roomID, ThreadRootEventId: p.threadRoot, Limit: p.limit,
-			Cursor: &apiv1.GetThreadEventsRequest_After{After: cursor},
-		}))
-		if err != nil {
-			return nil, err
+// olderThan pages back from the newest event to the page that contains
+// events older than t and returns those, with that page for its cursor.
+func (p *timelinePager) olderThan(ctx context.Context, t time.Time) ([]*apiv1.RoomTimelineEvent, *apiv1.RoomTimelinePage, error) {
+	page, err := p.latest(ctx)
+	for i := 0; err == nil; i++ {
+		var older []*apiv1.RoomTimelineEvent
+		for _, evt := range page.GetEvents() {
+			if evt.GetCreatedAt().AsTime().Before(t) {
+				older = append(older, evt)
+			}
 		}
-		return resp.Msg.GetPage(), nil
+		if len(older) > 0 || !page.GetHasOlder() || i >= maxForwardPages {
+			return older, page, nil
+		}
+		page, err = p.before(ctx, page.GetStartCursor())
 	}
-	resp, err := p.c.api.Rooms.GetRoomEvents(ctx, connect.NewRequest(&apiv1.GetRoomEventsRequest{
-		RoomId: p.roomID, Limit: p.limit, Cursor: &apiv1.GetRoomEventsRequest_After{After: cursor},
-	}))
-	if err != nil {
-		return nil, err
-	}
-	return resp.Msg.GetPage(), nil
+	return nil, nil, err
 }
 
 func (p *timelinePager) around(ctx context.Context, eventID string) (*apiv1.RoomTimelinePage, error) {
@@ -182,13 +186,68 @@ func (p *timelinePager) around(ctx context.Context, eventID string) (*apiv1.Room
 	return resp.Msg.GetPage(), nil
 }
 
-func eventsAfter(events []*apiv1.RoomTimelineEvent, anchorID string) []*apiv1.RoomTimelineEvent {
-	for i, evt := range events {
-		if evt.GetId() == anchorID {
-			return events[i+1:]
+// since returns the events created at or after t (all of the newest page
+// when t is zero), oldest first, plus the newest page for further lookups.
+// Events exactly at t are included; bridgev2 deduplicates them.
+func (p *timelinePager) since(ctx context.Context, t time.Time, limit int) ([]*apiv1.RoomTimelineEvent, *apiv1.RoomTimelinePage, error) {
+	newest, err := p.latest(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	if t.IsZero() {
+		return newest.GetEvents(), newest, nil
+	}
+	var out []*apiv1.RoomTimelineEvent
+	page := newest
+	for i := 0; ; i++ {
+		keep := page.GetEvents()
+		cut := 0
+		for cut < len(keep) && keep[cut].GetCreatedAt().AsTime().Before(t) {
+			cut++
+		}
+		out = append(slices.Clone(keep[cut:]), out...)
+		if cut > 0 || !page.GetHasOlder() || i >= maxForwardPages || len(out) >= limit {
+			break
+		}
+		page, err = p.before(ctx, page.GetStartCursor())
+		if err != nil {
+			return nil, nil, err
 		}
 	}
-	return events
+	if p.threadRoot != "" {
+		// The first thread page repeats the root; drop it here too.
+		out = slices.DeleteFunc(out, func(e *apiv1.RoomTimelineEvent) bool { return e.GetId() == p.threadRoot })
+	}
+	return out, newest, nil
+}
+
+// missedThreadReplies returns thread replies created at or after t in
+// threads whose roots are on the newest room page. The room timeline only
+// lists roots, so replies missed while disconnected are found through the
+// roots' last reply time.
+func (c *ChattoClient) missedThreadReplies(ctx context.Context, roomID string, newest *apiv1.RoomTimelinePage, events []*apiv1.RoomTimelineEvent, t time.Time) ([]*apiv1.RoomTimelineEvent, error) {
+	roots := make(map[string]bool)
+	for _, evt := range append(slices.Clone(newest.GetEvents()), events...) {
+		msg := evt.GetMessagePosted().GetMessage()
+		thread := msg.GetThread()
+		if thread == nil || thread.GetReplyCount() == 0 || roots[msg.GetId()] {
+			continue
+		}
+		if last := thread.GetLastReplyAt(); last != nil && last.AsTime().Before(t) {
+			continue
+		}
+		roots[msg.GetId()] = true
+	}
+	var out []*apiv1.RoomTimelineEvent
+	for root := range roots {
+		tp := &timelinePager{c: c, roomID: roomID, threadRoot: root, limit: 100}
+		replies, _, err := tp.since(ctx, t, 100)
+		if err != nil {
+			return out, err
+		}
+		out = append(out, replies...)
+	}
+	return out, nil
 }
 
 func eventsBefore(events []*apiv1.RoomTimelineEvent, anchorID string) []*apiv1.RoomTimelineEvent {

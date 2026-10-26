@@ -122,6 +122,10 @@ type Server struct {
 	MaxChunkSize int32
 	// DirectLogin enables password login.
 	DirectLogin bool
+	// TokenEndpointDown makes /oauth/token answer 503.
+	TokenEndpointDown atomic.Bool
+	// FailGetMessage makes the next n GetMessage calls fail as unavailable.
+	FailGetMessage atomic.Int32
 	// PublishBeforeResponse makes CreateMessage publish its realtime event
 	// and wait this long before responding, to reproduce the echo race.
 	PublishBeforeResponse time.Duration
@@ -590,6 +594,10 @@ func (s *Server) IssueAuthCode(c AuthCode) string {
 }
 
 func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
+	if s.TokenEndpointDown.Load() {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "temporarily_unavailable"})
+		return
+	}
 	var req struct {
 		GrantType    string `json:"grant_type"`
 		RefreshToken string `json:"refresh_token"`

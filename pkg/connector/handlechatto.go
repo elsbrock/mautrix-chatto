@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -21,6 +22,9 @@ import (
 	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
 	realtimev1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/realtime/v1"
 )
+
+// noticeIDPrefix marks message IDs of bridge-generated notices.
+const noticeIDPrefix = "notice:"
 
 // typingTimeout matches Chatto's receiver-side typing expiry.
 const typingTimeout = 6 * time.Second
@@ -48,8 +52,8 @@ func (c *ChattoClient) HandleState(state chattoclient.RealtimeState, err error) 
 // SaveCursor implements chattoclient.RealtimeHandler. Cursors are written at
 // most every 30 seconds; losing one only costs a snapshot on restart.
 func (c *ChattoClient) SaveCursor(cursor string) {
-	c.cursorLock.Lock()
-	defer c.cursorLock.Unlock()
+	c.metaLock.Lock()
+	defer c.metaLock.Unlock()
 	c.meta().RealtimeCursor = cursor
 	if time.Since(c.lastCursorSave) < 30*time.Second {
 		return
@@ -148,22 +152,47 @@ func (c *ChattoClient) roomNeedsBackfill(ctx context.Context, roomID string, lat
 	if err != nil {
 		return false, err
 	}
-	events := resp.Msg.GetPage().GetEvents()
-	for i := len(events) - 1; i >= 0; i-- {
-		posted := events[i].GetMessagePosted()
-		if posted == nil || posted.GetMessage().GetEchoOfEventId() != "" {
+	// Compare times rather than IDs: the newest bridged message may be a
+	// thread reply or a notice, which the room timeline does not list.
+	for _, evt := range resp.Msg.GetPage().GetEvents() {
+		msg := evt.GetMessagePosted().GetMessage()
+		if msg == nil || msg.GetEchoOfEventId() != "" {
 			continue
 		}
 		if latest == nil {
 			return true, nil
 		}
-		return string(latest.ID) != events[i].GetId() && events[i].GetCreatedAt().AsTime().After(latest.Timestamp), nil
+		if evt.GetCreatedAt().AsTime().After(latest.Timestamp) {
+			return true, nil
+		}
+		if last := msg.GetThread().GetLastReplyAt(); last != nil && last.AsTime().After(latest.Timestamp) {
+			return true, nil
+		}
 	}
 	return false, nil
 }
 
-// HandleEvent implements chattoclient.RealtimeHandler.
-func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.RealtimeEvent) {
+// isTransient reports whether an RPC error is worth retrying by replaying
+// the realtime event.
+func isTransient(ctx context.Context, err error) bool {
+	if err == nil || ctx.Err() != nil {
+		return false
+	}
+	var cerr *connect.Error
+	if !errors.As(err, &cerr) {
+		return true // network errors
+	}
+	switch cerr.Code() {
+	case connect.CodeUnavailable, connect.CodeDeadlineExceeded, connect.CodeResourceExhausted,
+		connect.CodeAborted, connect.CodeInternal, connect.CodeUnknown:
+		return true
+	}
+	return false
+}
+
+// HandleEvent implements chattoclient.RealtimeHandler. It only returns an
+// error for transient failures, which makes the client replay the event.
+func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.RealtimeEvent) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("event_id", evt.GetId()).
 		Str("event_type", chattoclient.EventType(evt)).
@@ -184,15 +213,15 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 	}
 	switch e := evt.GetEvent().(type) {
 	case *realtimev1.RealtimeEvent_MessagePosted:
-		c.handleMessagePosted(ctx, evt, e.MessagePosted)
+		return c.handleMessagePosted(ctx, evt, e.MessagePosted)
 	case *realtimev1.RealtimeEvent_MessageEdited:
-		c.handleMessageChanged(ctx, evt, e.MessageEdited.GetRoomId(), e.MessageEdited.GetMessageEventId())
+		return c.handleMessageChanged(ctx, evt, e.MessageEdited.GetRoomId(), e.MessageEdited.GetMessageEventId())
 	case *realtimev1.RealtimeEvent_AssetProcessingSucceeded:
-		c.handleMessageChanged(ctx, evt, e.AssetProcessingSucceeded.GetRoomId(), e.AssetProcessingSucceeded.GetMessageEventId())
+		return c.handleMessageChanged(ctx, evt, e.AssetProcessingSucceeded.GetRoomId(), e.AssetProcessingSucceeded.GetMessageEventId())
 	case *realtimev1.RealtimeEvent_AssetProcessingFailed:
-		c.handleMessageChanged(ctx, evt, e.AssetProcessingFailed.GetRoomId(), e.AssetProcessingFailed.GetMessageEventId())
+		return c.handleMessageChanged(ctx, evt, e.AssetProcessingFailed.GetRoomId(), e.AssetProcessingFailed.GetMessageEventId())
 	case *realtimev1.RealtimeEvent_AssetDeleted:
-		c.handleMessageChanged(ctx, evt, e.AssetDeleted.GetRoomId(), e.AssetDeleted.GetMessageEventId())
+		return c.handleMessageChanged(ctx, evt, e.AssetDeleted.GetRoomId(), e.AssetDeleted.GetMessageEventId())
 	case *realtimev1.RealtimeEvent_MessageRetracted:
 		c.UserLogin.QueueRemoteEvent(&simplevent.MessageRemove{
 			EventMeta:     meta(bridgev2.RemoteEventMessageRemove, e.MessageRetracted.GetRoomId()),
@@ -216,7 +245,7 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 		bridgemetrics.MessagesBridged.WithLabelValues("to_matrix", "reaction_remove").Inc()
 	case *realtimev1.RealtimeEvent_UserTyping:
 		if actor == c.userID {
-			return
+			return nil
 		}
 		c.UserLogin.QueueRemoteEvent(&simplevent.Typing{
 			EventMeta: meta(bridgev2.RemoteEventTyping, e.UserTyping.GetRoomId()),
@@ -261,10 +290,10 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 		roomID := e.UserJoinedRoom.GetRoomId()
 		if actor == c.userID || actor == "" {
 			c.resyncRoom(ctx, roomID, true)
-			return
+			return nil
 		}
 		if c.Main.IsGhostBot(ctx, actor) {
-			return
+			return nil
 		}
 		c.UserLogin.QueueRemoteEvent(&simplevent.ChatInfoChange{
 			EventMeta: meta(bridgev2.RemoteEventChatInfoChange, roomID),
@@ -279,10 +308,10 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 				EventMeta: meta(bridgev2.RemoteEventChatDelete, roomID),
 				OnlyForMe: true,
 			})
-			return
+			return nil
 		}
 		if c.Main.IsGhostBot(ctx, actor) {
-			return
+			return nil
 		}
 		member := c.makeMember(actor)
 		member.Membership = event.MembershipLeave
@@ -311,27 +340,44 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 	default:
 		log.Trace().Msg("Ignoring realtime event")
 	}
+	return nil
 }
 
-func (c *ChattoClient) handleMessagePosted(ctx context.Context, evt *realtimev1.RealtimeEvent, posted *realtimev1.MessagePostedEvent) {
+// mayBeBridgeSend reports whether a Chatto user's message could have been
+// sent by this bridge: any logged-in account or ghost bot. Only those wait
+// for in-flight sends, so other users' messages are never delayed.
+func (c *ChattoClient) mayBeBridgeSend(ctx context.Context, actor string) bool {
+	if actor == c.userID {
+		return true
+	}
+	if c.Main.Bridge.GetCachedUserLoginByID(chattoid.MakeUserLoginID(actor)) != nil {
+		return true
+	}
+	return c.Main.IsGhostBot(ctx, actor)
+}
+
+func (c *ChattoClient) handleMessagePosted(ctx context.Context, evt *realtimev1.RealtimeEvent, posted *realtimev1.MessagePostedEvent) error {
 	roomID := posted.GetRoomId()
 	if posted.GetEchoOfEventId() != "" {
 		c.handleThreadEcho(ctx, evt, posted)
-		return
+		return nil
 	}
-	if c.Main.echoes.IsEcho(ctx, roomID, evt.GetId()) {
+	if c.mayBeBridgeSend(ctx, evt.GetActorId()) && c.Main.echoes.IsEcho(ctx, roomID, evt.GetId()) {
 		zerolog.Ctx(ctx).Debug().Msg("Ignoring echo of message sent by the bridge")
-		return
+		return nil
 	}
 	resp, err := c.api.Messages.GetMessage(ctx, connect.NewRequest(&apiv1.GetMessageRequest{RoomId: roomID, EventId: evt.GetId()}))
 	if err != nil {
 		if connect.CodeOf(err) == connect.CodeNotFound {
 			// Already retracted.
-			return
+			return nil
 		}
 		bridgemetrics.BridgeErrors.WithLabelValues("to_matrix", "message").Inc()
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to fetch posted message")
-		return
+		if isTransient(ctx, err) {
+			return err
+		}
+		return nil
 	}
 	msg := resp.Msg.GetMessage()
 	c.UserLogin.QueueRemoteEvent(&simplevent.Message[*apiv1.Message]{
@@ -350,6 +396,7 @@ func (c *ChattoClient) handleMessagePosted(ctx context.Context, evt *realtimev1.
 		ConvertMessageFunc: c.convertMessageFunc,
 	})
 	bridgemetrics.MessagesBridged.WithLabelValues("to_matrix", "message").Inc()
+	return nil
 }
 
 func (c *ChattoClient) convertMessageFunc(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *apiv1.Message) (*bridgev2.ConvertedMessage, error) {
@@ -389,16 +436,20 @@ func (c *ChattoClient) handleThreadEcho(ctx context.Context, evt *realtimev1.Rea
 
 // handleMessageChanged refetches a message after an edit or asset update and
 // queues an edit.
-func (c *ChattoClient) handleMessageChanged(ctx context.Context, evt *realtimev1.RealtimeEvent, roomID, messageID string) {
+func (c *ChattoClient) handleMessageChanged(ctx context.Context, evt *realtimev1.RealtimeEvent, roomID, messageID string) error {
 	if roomID == "" || messageID == "" {
-		return
+		return nil
 	}
 	resp, err := c.api.Messages.GetMessage(ctx, connect.NewRequest(&apiv1.GetMessageRequest{RoomId: roomID, EventId: messageID}))
 	if err != nil {
-		if connect.CodeOf(err) != connect.CodeNotFound {
-			zerolog.Ctx(ctx).Err(err).Str("message_id", messageID).Msg("Failed to fetch changed message")
+		if connect.CodeOf(err) == connect.CodeNotFound {
+			return nil
 		}
-		return
+		zerolog.Ctx(ctx).Err(err).Str("message_id", messageID).Msg("Failed to fetch changed message")
+		if isTransient(ctx, err) {
+			return err
+		}
+		return nil
 	}
 	msg := resp.Msg.GetMessage()
 	ts := evt.GetCreatedAt().AsTime()
@@ -418,6 +469,7 @@ func (c *ChattoClient) handleMessageChanged(ctx context.Context, evt *realtimev1
 		ConvertEditFunc: c.convertEditFunc,
 	})
 	bridgemetrics.MessagesBridged.WithLabelValues("to_matrix", "edit").Inc()
+	return nil
 }
 
 // resyncRoom refetches a room and queues a resync.
@@ -448,7 +500,7 @@ func (c *ChattoClient) sendRoomNotice(ctx context.Context, roomID, actor string,
 			Sender:    sender,
 			Timestamp: ts,
 		},
-		ID:   networkid.MessageID(fmt.Sprintf("notice:%s:%d", roomID, ts.UnixNano())),
+		ID:   networkid.MessageID(fmt.Sprintf("%s%s:%d", noticeIDPrefix, roomID, ts.UnixNano())),
 		Data: text,
 		ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, text string) (*bridgev2.ConvertedMessage, error) {
 			return &bridgev2.ConvertedMessage{Parts: []*bridgev2.ConvertedMessagePart{{
@@ -528,7 +580,7 @@ func (c *ChattoClient) handlePresence(ctx context.Context, userID string, presen
 // handleInvitation tells the user about a Chatto room invitation, which
 // they can accept with the accept-invite command.
 func (c *ChattoClient) handleInvitation(ctx context.Context, roomID, invitationID string) {
-	if c.meta().IsBot {
+	if c.isBot() {
 		return
 	}
 	resp, err := c.api.RoomDirectory.GetRoom(ctx, connect.NewRequest(&apiv1.GetRoomRequest{RoomId: roomID}))

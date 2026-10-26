@@ -12,11 +12,16 @@ which only happens after the response.
 - Every send carries `idempotency_key = UUIDv5(namespace, matrix_event_id)`.
   Retries of the same Matrix event within Chatto's 30-minute window return the
   original message instead of duplicating it.
-- An `echoTracker` counts in-flight sends per room. A `message_posted` from the
-  login's own account in that room waits (up to 15 s) for the in-flight sends
-  to finish, then is dropped if its ID was returned by one of them. IDs are
-  remembered for 10 minutes. Messages from the same account sent by other
-  Chatto clients are bridged normally (double puppeting).
+- One `echoTracker` per bridge (not per login) counts in-flight sends per
+  room. A `message_posted` whose author could be the bridge (any logged-in
+  account or ghost bot) waits for the room's in-flight sends to finish, for up
+  to 15 s. It is then dropped if one of those sends returned its ID. IDs are
+  remembered for 10 minutes. Messages from other users never wait. Messages
+  from a bridged account that were sent by its other Chatto clients are
+  bridged normally (double puppeting).
+- Edits: text parts store a hash of the bridged Chatto body. A
+  `message_edited` echo of an edit made on Matrix, or an asset event, leaves
+  the text unchanged and produces no Matrix edit.
 
 ## Consequences
 A realtime event from our own account can be delayed by up to one send's

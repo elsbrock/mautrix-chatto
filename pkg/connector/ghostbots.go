@@ -43,12 +43,51 @@ func (b *ghostBot) inRoom(roomID string) bool {
 	return false
 }
 
-// ghostBots stores and creates ghost bots. It is shared by all logins.
+// ghostBots stores and creates ghost bots. It is shared by all logins. mu
+// only guards the maps; creating or updating one user's bot is serialised by
+// that user's lock so that RPCs never run under mu.
 type ghostBots struct {
-	mu     sync.Mutex
-	byMXID map[id.UserID]*ghostBot
-	byUser map[string]id.UserID // Chatto user ID → Matrix user
-	loaded bool
+	mu        sync.Mutex
+	byMXID    map[id.UserID]*ghostBot
+	byUser    map[string]id.UserID // Chatto user ID → Matrix user
+	userLocks map[id.UserID]*sync.Mutex
+	loaded    bool
+}
+
+// lockUser serialises ghost bot work for one Matrix user.
+func (gb *ghostBots) lockUser(mxid id.UserID) func() {
+	gb.mu.Lock()
+	if gb.userLocks == nil {
+		gb.userLocks = make(map[id.UserID]*sync.Mutex)
+	}
+	l, ok := gb.userLocks[mxid]
+	if !ok {
+		l = &sync.Mutex{}
+		gb.userLocks[mxid] = l
+	}
+	gb.mu.Unlock()
+	l.Lock()
+	return l.Unlock
+}
+
+// get returns a copy of a user's ghost bot, if any.
+func (c *Connector) getGhostBot(ctx context.Context, mxid id.UserID) *ghostBot {
+	c.ghostBots.mu.Lock()
+	defer c.ghostBots.mu.Unlock()
+	c.loadGhostBotsLocked(ctx)
+	if bot, ok := c.ghostBots.byMXID[mxid]; ok {
+		cp := *bot
+		cp.Rooms = append([]string(nil), bot.Rooms...)
+		return &cp
+	}
+	return nil
+}
+
+func (c *Connector) storeGhostBot(ctx context.Context, mxid id.UserID, bot *ghostBot) {
+	c.ghostBots.mu.Lock()
+	defer c.ghostBots.mu.Unlock()
+	c.loadGhostBotsLocked(ctx)
+	c.saveGhostBotLocked(ctx, mxid, bot)
 }
 
 func ghostBotKey(mxid id.UserID) database.Key {
@@ -80,9 +119,11 @@ func (c *Connector) loadGhostBotsLocked(ctx context.Context) {
 
 func (c *Connector) saveGhostBotLocked(ctx context.Context, mxid id.UserID, bot *ghostBot) {
 	gb := &c.ghostBots
-	gb.byMXID[mxid] = bot
+	stored := *bot
+	stored.Rooms = append([]string(nil), bot.Rooms...)
+	gb.byMXID[mxid] = &stored
 	gb.byUser[bot.UserID] = mxid
-	data, _ := json.Marshal(bot)
+	data, _ := json.Marshal(&stored)
 	c.Bridge.DB.KV.Set(ctx, ghostBotKey(mxid), string(data))
 	index := make([]id.UserID, 0, len(gb.byMXID))
 	for m := range gb.byMXID {
@@ -148,14 +189,13 @@ var errGhostBotsUnavailable = errors.New("ghost bots need a human relay login")
 // ensureGhostBot returns the ghost bot for a relayed Matrix user, creating it
 // and adding it to the room on first use. owner is the relay login.
 func (c *ChattoClient) ensureGhostBot(ctx context.Context, sender *bridgev2.OrigSender, roomID string) (*ghostBot, error) {
-	if c.meta().IsBot {
+	if c.isBot() {
 		return nil, errGhostBotsUnavailable
 	}
 	main := c.Main
-	main.ghostBots.mu.Lock()
-	defer main.ghostBots.mu.Unlock()
-	main.loadGhostBotsLocked(ctx)
-	bot := main.ghostBots.byMXID[sender.UserID]
+	unlock := main.ghostBots.lockUser(sender.UserID)
+	defer unlock()
+	bot := main.getGhostBot(ctx, sender.UserID)
 	name := main.Config.FormatGhostBotDisplayname(GhostBotParams{DisplayName: origSenderName(sender), UserID: string(sender.UserID)})
 	if name == "" {
 		name = string(sender.UserID)
@@ -173,7 +213,7 @@ func (c *ChattoClient) ensureGhostBot(ctx context.Context, sender *bridgev2.Orig
 			UserID: resp.Msg.GetBot().GetUser().GetId(), Login: login,
 			APIKey: resp.Msg.GetApiKey(), Owner: c.userID, DisplayName: name,
 		}
-		main.saveGhostBotLocked(ctx, sender.UserID, bot)
+		main.storeGhostBot(ctx, sender.UserID, bot)
 		zerolog.Ctx(ctx).Info().Str("bot_id", bot.UserID).Str("bot_login", login).
 			Stringer("matrix_user", sender.UserID).Msg("Created ghost bot")
 	} else if bot.DisplayName != name {
@@ -183,7 +223,7 @@ func (c *ChattoClient) ensureGhostBot(ctx context.Context, sender *bridgev2.Orig
 		}))
 		if err == nil {
 			bot.DisplayName = name
-			main.saveGhostBotLocked(ctx, sender.UserID, bot)
+			main.storeGhostBot(ctx, sender.UserID, bot)
 		}
 	}
 	if !bot.inRoom(roomID) {
@@ -203,7 +243,7 @@ func (c *ChattoClient) ensureGhostBot(ctx context.Context, sender *bridgev2.Orig
 			return nil, fmt.Errorf("failed to add ghost bot to room: %w", err)
 		}
 		bot.Rooms = append(bot.Rooms, roomID)
-		main.saveGhostBotLocked(ctx, sender.UserID, bot)
+		main.storeGhostBot(ctx, sender.UserID, bot)
 	}
 	return bot, nil
 }

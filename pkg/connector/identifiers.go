@@ -71,7 +71,7 @@ func (c *ChattoClient) userToResolveResponse(ctx context.Context, user *apiv1.Us
 }
 
 func (c *ChattoClient) startDM(ctx context.Context, userID string) (*bridgev2.CreateChatResponse, error) {
-	if c.meta().IsBot {
+	if c.isBot() {
 		return nil, ErrBotsCannotStartDMs
 	}
 	resp, err := c.api.Rooms.StartDM(ctx, connect.NewRequest(&apiv1.StartDMRequest{ParticipantIds: []string{userID}}))

@@ -23,6 +23,8 @@ type recorder struct {
 	states    []chattoclient.RealtimeState
 	cursor    string
 	notify    chan struct{}
+	// failNext makes the next n HandleEvent calls fail.
+	failNext, failures int
 }
 
 func newRecorder() *recorder { return &recorder{notify: make(chan struct{}, 1000)} }
@@ -34,11 +36,18 @@ func (r *recorder) poke() {
 	}
 }
 
-func (r *recorder) HandleEvent(_ context.Context, evt *realtimev1.RealtimeEvent) {
+func (r *recorder) HandleEvent(_ context.Context, evt *realtimev1.RealtimeEvent) error {
 	r.mu.Lock()
+	if r.failNext > 0 {
+		r.failNext--
+		r.failures++
+		r.mu.Unlock()
+		return errors.New("transient failure")
+	}
 	r.events = append(r.events, evt)
 	r.mu.Unlock()
 	r.poke()
+	return nil
 }
 
 func (r *recorder) HandleSnapshot(context.Context, *realtimev1.RealtimeSnapshot) {
@@ -309,5 +318,26 @@ func TestEventType(t *testing.T) {
 	}
 	if got := chattoclient.EventType(&realtimev1.RealtimeEvent{}); got != "unknown" {
 		t.Fatalf("empty EventType = %q", got)
+	}
+}
+
+func TestRealtimeHandlerFailureReplaysEvent(t *testing.T) {
+	f := newRTFixture(t)
+	f.start()
+	f.rec.waitFor(t, "caught up", func(r *recorder) bool { return len(r.caughtUp) == 1 })
+	f.rec.mu.Lock()
+	f.rec.failNext = 1
+	f.rec.mu.Unlock()
+	m := f.srv.PostMessage(f.bob.ID, f.room.ID, "retry me")
+	f.rec.waitFor(t, "replayed message", func(r *recorder) bool { return len(messageIDs(r.events)) == 1 })
+	f.rec.waitFor(t, "second catch-up", func(r *recorder) bool { return len(r.caughtUp) == 2 })
+	f.rec.mu.Lock()
+	defer f.rec.mu.Unlock()
+	if messageIDs(f.rec.events)[0] != m.ID || f.rec.failures != 1 {
+		t.Fatalf("events %v failures %d", messageIDs(f.rec.events), f.rec.failures)
+	}
+	// The replay must come from resuming, not from a snapshot.
+	if f.rec.caughtUp[len(f.rec.caughtUp)-1] != realtimev1.RealtimeRecovery_REALTIME_RECOVERY_RESUMED {
+		t.Fatalf("recoveries %v", f.rec.caughtUp)
 	}
 }

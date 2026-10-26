@@ -1,6 +1,9 @@
 package chattoid
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
 )
 
@@ -45,4 +48,13 @@ type MessageMetadata struct {
 	// Processing is true while Chatto was still processing the asset when
 	// the part was bridged, so a later success event triggers an edit.
 	Processing bool `json:"processing,omitempty"`
+	// TextHash identifies the Chatto body last bridged into a text part, so
+	// that events which don't change the text don't produce Matrix edits.
+	TextHash string `json:"text_hash,omitempty"`
+}
+
+// HashText returns the TextHash of a Chatto message body.
+func HashText(body string) string {
+	sum := sha256.Sum256([]byte(body))
+	return hex.EncodeToString(sum[:8])
 }

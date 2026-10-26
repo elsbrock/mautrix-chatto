@@ -90,7 +90,7 @@ func (c *ChattoClient) GetCapabilities(ctx context.Context, portal *bridgev2.Por
 		caps.ID += "+nothreads"
 		caps.Thread = event.CapLevelRejected
 	}
-	if meta.Kind == portalKindChannel && c.Main.Config.GhostBots.Enabled && !c.meta().IsBot {
+	if meta.Kind == portalKindChannel && c.Main.Config.GhostBots.Enabled && !c.isBot() {
 		// Relayed messages arrive unformatted and are posted by ghost bots.
 		caps.ID += "+ghostbots"
 		caps.PerMessageProfileRelay = true

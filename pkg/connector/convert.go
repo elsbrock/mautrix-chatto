@@ -92,7 +92,7 @@ func (c *ChattoClient) convertMessage(ctx context.Context, portal *bridgev2.Port
 		cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{
 			Type:       event.EventMessage,
 			Content:    content,
-			DBMetadata: &chattoid.MessageMetadata{},
+			DBMetadata: &chattoid.MessageMetadata{TextHash: chattoid.HashText(body)},
 		})
 	}
 	for _, att := range msg.GetAttachments() {
@@ -212,10 +212,20 @@ func (c *ChattoClient) convertEdit(ctx context.Context, portal *bridgev2.Portal,
 	for _, part := range existing {
 		byPart[part.PartID] = part
 	}
-	if textPart, ok := byPart[""]; ok {
+	textPart, hasText := byPart[""]
+	if hasText {
+		if meta, _ := textPart.Metadata.(*chattoid.MessageMetadata); meta != nil && meta.TextHash == chattoid.HashText(msg.GetBody()) {
+			// Asset events and echoes of our own edits leave the text alone.
+			hasText = false
+		}
+	}
+	if hasText {
 		content := c.convertText(ctx, msg.GetBody())
 		if lp := convertLinkPreview(msg.GetLinkPreview()); lp != nil {
 			content.BeeperLinkPreviews = []*event.BeeperLinkPreview{lp}
+		}
+		if meta, _ := textPart.Metadata.(*chattoid.MessageMetadata); meta != nil {
+			meta.TextHash = chattoid.HashText(msg.GetBody())
 		}
 		edit.ModifiedParts = append(edit.ModifiedParts, &bridgev2.ConvertedEditPart{
 			Part:    textPart,
