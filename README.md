@@ -37,14 +37,14 @@ your Matrix homeserver:
 | Room name and topic | ✅ | ✅ | Channels only |
 | Room avatars | ➖ | ➖ | Chatto rooms have no avatars |
 | User avatars and names | ✅ | ➖ | |
-| Room groups → spaces | ✅ | ➖ | |
+| Servers and room groups → spaces | ✅ | ➖ | One space per server; room groups as subspaces with `network.group_spaces` |
 | Membership | ✅ | 🟡 | Leaving, adding (invite) and removing (kick) Chatto users in channels |
 | DMs | ✅ | ✅ | Start a DM with `start-chat @login` (human accounts only; Chatto forbids bot DMs) |
 | Group DMs | ✅ | ❌ | Chatto no longer lets anyone create new group DMs |
 | Archived and deleted rooms | ✅ | ➖ | Archived rooms get a notice and topic marker, and sends are refused |
 | Voice calls | 🟡 | ❌ | Start and end notices; no media bridging |
 | Pins | ✅ | ❌ | Chatto pins set `m.room.pinned_events`; bridgev2 has no hook for pins made on Matrix |
-| Room invitations | 🟡 | ➖ | Human accounts get a notice and an `accept-invite` command |
+| Room invitations | 🟡 | ➖ | Human accounts get a notice with the `accept-invite <invitation ID>` command to run |
 | Backfill | ✅ | ➖ | Initial history, threads, and forward fill after downtime |
 | Double puppeting | ✅ | ✅ | bridgev2 built-in |
 | Relay mode | ✅ | ✅ | bridgev2 relay, or optional per-user **ghost bot** accounts on Chatto |
@@ -54,7 +54,9 @@ your Matrix homeserver:
 
 ## Logging in
 
-Send `login` to the bridge bot. The available flows are:
+Send `login` to the bridge bot. With more than one server configured, every
+flow first asks which server, by its `id` from `network.servers` (for example
+`login password work alice hunter2`). The available flows are:
 - **Password:** Chatto username or email plus password. The server can turn
   this off (`auth.direct_login`), and so can the bridge
   (`network.allow_password_login`).
@@ -69,7 +71,28 @@ Send `login` to the bridge bot. The available flows are:
   (`cht_RT_…`). The bridge takes over a refresh token, so the session it came
   from will be signed out.
 
-Each Matrix user can have several Chatto logins.
+Each Matrix user can have several Chatto logins, also on different servers.
+A login only ever acts in rooms of its own server; with several servers,
+`list-logins` shows the server after each login's name.
+
+### Several servers
+
+Add another entry to `network.servers` and restart. Existing logins and rooms
+are untouched, and the appservice registration doesn't change. Each server
+appears as its own space, named after the server.
+
+The `id` is permanent. It is part of every ID the bridge stores and of every
+ghost's Matrix ID (`@chatto_<id>.<Chatto user ID>:example.com` with the default
+`username_template`), so keep it short. It must be 1-16 characters of `a-z`,
+`0-9` and `-`. Changing it later orphans everything bridged under it; only
+`url` may change. See [ADR 0012](docs/decisions/0012-multiple-servers.md).
+
+`personal_filtering_spaces` (on by default) additionally gives each Matrix user
+a private space with all of their rooms across servers.
+
+Commands that act on Chatto (`accept-invite`, `grant-bot-permissions`) use the
+server of the room they're run in. Elsewhere, add `--server <id>` when you are
+logged into more than one server.
 
 ### Bot accounts
 
@@ -78,9 +101,11 @@ DMs. To bridge a bot account:
 
 1. Log in with the bot's API key.
 2. Log in with the human account that owns the bot.
-3. Run `grant-bot-permissions <bot login>` inside a portal to grant the room
-   scope and add the bot to that room, or with `server` or `group <id>` for a
-   wider scope.
+3. Run `grant-bot-permissions <bot>` inside a portal to grant the room
+   scope and add the bot to that room, or with `server` or `group <group ID>`
+   for a wider scope. `<bot>` is the bot's Chatto username or user ID. The
+   human login and the bot must be on the same server; the server comes from
+   the portal, from the bot's own login, or from `--server <id>`.
 
 It grants `room.list`, `room.join`, `message.read`, `message.post`,
 `message.post-in-thread`, `message.echo`, `message.attach` and

@@ -251,7 +251,17 @@ in
     assertions = [
       {
         assertion = cfg.settings.network.servers != [ ];
-        message = "services.mautrix-chatto.settings.network.servers must list at least one Chatto server ({ id = \"main\"; url = \"https://chat.example.com\"; }).";
+        message =
+          "services.mautrix-chatto.settings.network.servers must list at least one Chatto server ({ id = \"main\"; url = \"https://chat.example.com\"; })."
+          + lib.optionalString (
+            cfg.settings.network ? server_url && cfg.settings.network.server_url != ""
+          ) " network.server_url was replaced by network.servers.";
+      }
+      {
+        assertion = lib.all (
+          s: builtins.match "[a-z0-9-]{1,16}" (s.id or "") != null
+        ) cfg.settings.network.servers;
+        message = "services.mautrix-chatto.settings.network.servers: each id must be 1-16 characters of a-z, 0-9 and -. The id is part of every bridged ID and must never change.";
       }
       {
         assertion = cfg.settings.homeserver.domain or "" != "";

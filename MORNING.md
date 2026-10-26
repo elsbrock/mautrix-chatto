@@ -18,7 +18,7 @@ bridge on SQLite:
   - refresh tokens are single-use and rotated crash-safely
 - **Portals:**
   - channels, DMs and group DMs
-  - room groups as spaces
+  - one space per server, room groups as optional subspaces
   - name and topic both ways
   - membership, archive and delete handling
 - **Messages, both ways:**
@@ -156,6 +156,6 @@ against a running Chatto. Most worth checking first:
 4. Upstream: ask Chatto for an appservice-style API (posting as other users,
    or a per-message display name). It would make ghost bots unnecessary.
 
-Design decisions are in `docs/decisions/` (11 ADRs). Protocol facts the bridge
+Design decisions are in `docs/decisions/` (12 ADRs). Protocol facts the bridge
 relies on are in `docs/chatto-protocol-notes.md`. The living backlog is in
 `TODO.md`.

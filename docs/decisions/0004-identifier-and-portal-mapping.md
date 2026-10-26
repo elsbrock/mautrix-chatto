@@ -3,8 +3,9 @@
 Status: accepted (2026-10-25)
 
 ## Decision
-- **Server prefix:** every network ID below is prefixed with the server
-  `id` and a dot (0012). The examples omit it.
+- **Server prefix:** ghost, login, portal and message IDs are prefixed with
+  the server `id` and a dot (0012). The examples omit it. Part and emoji IDs
+  live under a message and stay unprefixed.
 - **Ghosts:** a ghost ID is the Chatto user ID (`U…`). A login ID is also the
   Chatto user ID, so two Matrix users can never hold the same Chatto account.
 - **Portals:** a portal ID is the room ID (`R…`). Receivers are never split:
