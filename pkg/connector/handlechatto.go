@@ -262,6 +262,9 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 			c.resyncRoom(ctx, roomID, true)
 			return
 		}
+		if c.Main.IsGhostBot(ctx, actor) {
+			return
+		}
 		c.UserLogin.QueueRemoteEvent(&simplevent.ChatInfoChange{
 			EventMeta: meta(bridgev2.RemoteEventChatInfoChange, roomID),
 			ChatInfoChange: &bridgev2.ChatInfoChange{MemberChanges: &bridgev2.ChatMemberList{
@@ -275,6 +278,9 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 				EventMeta: meta(bridgev2.RemoteEventChatDelete, roomID),
 				OnlyForMe: true,
 			})
+			return
+		}
+		if c.Main.IsGhostBot(ctx, actor) {
 			return
 		}
 		member := c.makeMember(actor)
@@ -308,7 +314,7 @@ func (c *ChattoClient) handleMessagePosted(ctx context.Context, evt *realtimev1.
 		c.handleThreadEcho(ctx, evt, posted)
 		return
 	}
-	if evt.GetActorId() == c.userID && c.echoes.IsEcho(ctx, roomID, evt.GetId()) {
+	if c.Main.echoes.IsEcho(ctx, roomID, evt.GetId()) {
 		zerolog.Ctx(ctx).Debug().Msg("Ignoring echo of message sent by the bridge")
 		return
 	}

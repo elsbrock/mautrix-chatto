@@ -12,6 +12,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
+	"gopkg.in/yaml.v3"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/commands"
@@ -48,6 +49,21 @@ func withBackfill(n int) harnessOpt {
 
 var harnessCounter int
 
+// relayConfigYAML mirrors bridgev2's default relay templates.
+const relayConfigYAML = `
+enabled: true
+message_formats:
+  m.text: "<b>{{ .Sender.DisambiguatedName }}</b>: {{ .Message }}"
+  m.notice: "<b>{{ .Sender.DisambiguatedName }}</b>: {{ .Message }}"
+  m.emote: "* <b>{{ .Sender.DisambiguatedName }}</b> {{ .Message }}"
+  m.file: "<b>{{ .Sender.DisambiguatedName }}</b> sent a file{{ if .Caption }}: {{ .Caption }}{{ end }}"
+  m.image: "<b>{{ .Sender.DisambiguatedName }}</b> sent an image{{ if .Caption }}: {{ .Caption }}{{ end }}"
+  m.audio: "<b>{{ .Sender.DisambiguatedName }}</b> sent an audio file{{ if .Caption }}: {{ .Caption }}{{ end }}"
+  m.video: "<b>{{ .Sender.DisambiguatedName }}</b> sent a video{{ if .Caption }}: {{ .Caption }}{{ end }}"
+  m.location: "<b>{{ .Sender.DisambiguatedName }}</b> sent a location{{ if .Caption }}: {{ .Caption }}{{ end }}"
+displayname_format: "{{ .DisambiguatedName }}"
+`
+
 func newHarness(t *testing.T, opts ...harnessOpt) *harness {
 	t.Helper()
 	srv := chattotest.New()
@@ -73,6 +89,9 @@ func newHarness(t *testing.T, opts ...harnessOpt) *harness {
 		Permissions: bridgeconfig.PermissionConfig{
 			"*": &bridgeconfig.Permissions{SendEvents: true, Commands: true, Login: true, ManageRelay: true},
 		},
+	}
+	if err := yaml.Unmarshal([]byte(relayConfigYAML), &cfg.Relay); err != nil {
+		t.Fatal(err)
 	}
 	conn := &Connector{HTTPClient: httpClientNoRedirectLimit, Version: "test"}
 	conn.Config = Config{

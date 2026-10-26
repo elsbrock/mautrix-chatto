@@ -27,7 +27,6 @@ type ChattoClient struct {
 	rt     *chattoclient.Realtime
 
 	userID string
-	echoes *echoTracker
 	users  *userCache
 
 	stopLock sync.Mutex
@@ -64,7 +63,6 @@ func newChattoClient(main *Connector, login *bridgev2.UserLogin) *ChattoClient {
 		Main:      main,
 		UserLogin: login,
 		userID:    chattoid.ParseUserLoginID(login.ID),
-		echoes:    newEchoTracker(),
 		typing:    make(map[networkid.PortalID]context.CancelFunc),
 	}
 }

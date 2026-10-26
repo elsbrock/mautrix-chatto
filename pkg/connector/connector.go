@@ -34,6 +34,10 @@ type Connector struct {
 	serverVersion string
 	metricsServer *http.Server
 	uploadLimit   uploadLimit
+	// echoes is shared by all logins: any login's realtime stream may see
+	// a message another login (or a ghost bot) is still sending.
+	echoes    *echoTracker
+	ghostBots ghostBots
 
 	readyLock sync.RWMutex
 	ready     bool
@@ -87,6 +91,7 @@ func (c *Connector) GetName() bridgev2.BridgeName {
 
 func (c *Connector) Init(bridge *bridgev2.Bridge) {
 	c.Bridge = bridge
+	c.echoes = newEchoTracker()
 	if c.HTTPClient == nil {
 		c.HTTPClient = &http.Client{Timeout: 5 * time.Minute}
 	}

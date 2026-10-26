@@ -113,7 +113,7 @@ func (c *ChattoClient) listUsers(ctx context.Context, search string, limit int32
 	out := make([]*bridgev2.ResolveIdentifierResponse, 0, len(resp.Msg.GetUsers()))
 	for _, member := range resp.Msg.GetUsers() {
 		user := member.GetUser()
-		if user.GetDeleted() || user.GetId() == c.userID {
+		if user.GetDeleted() || user.GetId() == c.userID || c.Main.IsGhostBot(ctx, user.GetId()) {
 			continue
 		}
 		c.users.Put(user)

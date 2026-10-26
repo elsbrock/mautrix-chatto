@@ -17,6 +17,7 @@ import (
 	"maunium.net/go/mautrix/id"
 
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/bridgemetrics"
+	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattofmt"
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
 	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
@@ -156,12 +157,29 @@ func (c *ChattoClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.Ma
 		}
 	}
 
+	api := c.api
+	senderID := c.userID
 	content := msg.Content
+	if msg.OrigSender != nil && c.Main.Config.GhostBots.Enabled {
+		bot, err := c.ensureGhostBot(ctx, msg.OrigSender, roomID)
+		if err == nil {
+			api = c.ghostBotClient(bot)
+			senderID = bot.UserID
+		} else {
+			// Fall back to plain relaying with a name prefix.
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("Ghost bot unavailable, relaying with a name prefix")
+			formatted, ferr := c.Main.Bridge.Config.Relay.FormatMessage(content, msg.OrigSender)
+			if ferr != nil {
+				return nil, ferr
+			}
+			content = formatted
+		}
+	}
 	msgType := "text"
 	switch content.MsgType {
 	case event.MsgImage, event.MsgVideo, event.MsgAudio, event.MsgFile:
 		msgType = "media"
-		assetID, err := c.uploadMatrixMedia(ctx, roomID, content)
+		assetID, err := c.uploadMatrixMedia(ctx, api, roomID, content)
 		if err != nil {
 			return nil, err
 		}
@@ -172,7 +190,7 @@ func (c *ChattoClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.Ma
 	default:
 		if msg.Event.Type == event.EventSticker {
 			msgType = "sticker"
-			assetID, err := c.uploadMatrixMedia(ctx, roomID, content)
+			assetID, err := c.uploadMatrixMedia(ctx, api, roomID, content)
 			if err != nil {
 				return nil, err
 			}
@@ -185,8 +203,8 @@ func (c *ChattoClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.Ma
 		return nil, ErrMessageTooLong
 	}
 
-	finish := c.echoes.Begin(roomID)
-	resp, err := c.api.Messages.CreateMessage(ctx, connect.NewRequest(req))
+	finish := c.Main.echoes.Begin(roomID)
+	resp, err := api.Messages.CreateMessage(ctx, connect.NewRequest(req))
 	if err != nil {
 		finish("")
 		bridgemetrics.BridgeErrors.WithLabelValues("to_chatto", msgType).Inc()
@@ -197,7 +215,7 @@ func (c *ChattoClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.Ma
 	bridgemetrics.MessagesBridged.WithLabelValues("to_chatto", msgType).Inc()
 	dbMsg := &database.Message{
 		ID:        chattoid.MakeMessageID(created.GetId()),
-		SenderID:  chattoid.MakeUserID(c.userID),
+		SenderID:  chattoid.MakeUserID(senderID),
 		Timestamp: created.GetCreatedAt().AsTime(),
 		Metadata:  &chattoid.MessageMetadata{},
 	}
@@ -255,6 +273,7 @@ func (c *ChattoClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Matri
 	if err != nil {
 		return err
 	}
+	api := c.apiForMessage(ctx, msg.EditTarget)
 	content := msg.Content
 	if content.MsgType.IsMedia() {
 		content = captionContent(content)
@@ -263,7 +282,7 @@ func (c *ChattoClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Matri
 	if len(body) > maxBodyLength {
 		return ErrMessageTooLong
 	}
-	_, err = c.api.Messages.UpdateMessage(ctx, connect.NewRequest(&apiv1.UpdateMessageRequest{
+	_, err = api.Messages.UpdateMessage(ctx, connect.NewRequest(&apiv1.UpdateMessageRequest{
 		RoomId:     roomID,
 		EventId:    chattoid.ParseMessageID(msg.EditTarget.ID),
 		Body:       &body,
@@ -282,12 +301,13 @@ func (c *ChattoClient) HandleMatrixMessageRemove(ctx context.Context, msg *bridg
 	if err != nil {
 		return err
 	}
+	api := c.apiForMessage(ctx, msg.TargetMessage)
 	eventID := chattoid.ParseMessageID(msg.TargetMessage.ID)
 	if attID, isAttachment := chattoid.ParseAttachmentPartID(msg.TargetMessage.PartID); isAttachment {
 		// Redacting one attachment of a multi-part message removes just it.
 		parts, err := c.Main.Bridge.DB.Message.GetAllPartsByID(ctx, msg.Portal.Receiver, msg.TargetMessage.ID)
 		if err == nil && len(parts) > 1 {
-			_, err = c.api.Messages.DeleteAttachment(ctx, connect.NewRequest(&apiv1.DeleteAttachmentRequest{
+			_, err = api.Messages.DeleteAttachment(ctx, connect.NewRequest(&apiv1.DeleteAttachmentRequest{
 				RoomId: roomID, EventId: eventID, AttachmentId: attID,
 			}))
 			if err != nil {
@@ -297,7 +317,7 @@ func (c *ChattoClient) HandleMatrixMessageRemove(ctx context.Context, msg *bridg
 			return nil
 		}
 	}
-	_, err = c.api.Messages.DeleteMessage(ctx, connect.NewRequest(&apiv1.DeleteMessageRequest{RoomId: roomID, EventId: eventID}))
+	_, err = api.Messages.DeleteMessage(ctx, connect.NewRequest(&apiv1.DeleteMessageRequest{RoomId: roomID, EventId: eventID}))
 	if err != nil {
 		bridgemetrics.BridgeErrors.WithLabelValues("to_chatto", "redaction").Inc()
 		return wrapSendError(err)
@@ -503,4 +523,15 @@ func membershipTargetUserID(target bridgev2.GhostOrUserLogin) (string, bool) {
 		return chattoid.ParseUserLoginID(t.ID), true
 	}
 	return "", false
+}
+
+// apiForMessage returns the client that may edit or delete a bridged
+// message: the ghost bot that sent it, or this login.
+func (c *ChattoClient) apiForMessage(ctx context.Context, msg *database.Message) *chattoclient.Client {
+	if msg != nil {
+		if bot := c.Main.ghostBotForMessage(ctx, chattoid.ParseUserID(msg.SenderID)); bot != nil {
+			return c.ghostBotClient(bot)
+		}
+	}
+	return c.api
 }

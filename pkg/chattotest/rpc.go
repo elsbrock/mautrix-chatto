@@ -921,3 +921,60 @@ func (s *Server) PermissionsFor(userID string) []Permission {
 	}
 	return out
 }
+
+type botService struct {
+	apiv1connect.UnimplementedBotServiceHandler
+	s *Server
+}
+
+func (bs *botService) CreateBot(ctx context.Context, req *connect.Request[apiv1.CreateBotRequest]) (*connect.Response[apiv1.CreateBotResponse], error) {
+	owner := viewerID(ctx)
+	bs.s.mu.Lock()
+	if bs.s.users[owner].BotOwner != "" {
+		bs.s.mu.Unlock()
+		return nil, errDenied("bot API keys cannot manage bots")
+	}
+	for _, u := range bs.s.users {
+		if strings.EqualFold(u.Login, req.Msg.GetLogin()) {
+			bs.s.mu.Unlock()
+			return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("login taken"))
+		}
+	}
+	bs.s.mu.Unlock()
+	bot, key := bs.s.AddBot(req.Msg.GetLogin(), req.Msg.GetDisplayName(), owner)
+	bs.s.mu.Lock()
+	defer bs.s.mu.Unlock()
+	return connect.NewResponse(&apiv1.CreateBotResponse{
+		Bot:    &apiv1.Bot{User: bs.s.userProtoLocked(bot), OwnerUserId: owner},
+		ApiKey: key,
+	}), nil
+}
+
+// Bots returns all bot accounts.
+func (s *Server) Bots() []User {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []User
+	for _, u := range s.users {
+		if u.BotOwner != "" {
+			out = append(out, *u)
+		}
+	}
+	return out
+}
+
+func (us *userService) UpdateUserProfile(ctx context.Context, req *connect.Request[apiv1.UpdateUserProfileRequest]) (*connect.Response[apiv1.UpdateUserProfileResponse], error) {
+	us.s.mu.Lock()
+	defer us.s.mu.Unlock()
+	u, ok := us.s.users[req.Msg.GetUserId()]
+	if !ok {
+		return nil, errNotFound("user")
+	}
+	if u.ID != viewerID(ctx) && u.BotOwner != viewerID(ctx) {
+		return nil, errDenied("cannot edit this profile")
+	}
+	if req.Msg.DisplayName != nil {
+		u.DisplayName = req.Msg.GetDisplayName()
+	}
+	return connect.NewResponse(&apiv1.UpdateUserProfileResponse{User: us.s.userProtoLocked(u)}), nil
+}

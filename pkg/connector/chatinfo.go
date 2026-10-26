@@ -107,6 +107,9 @@ func (c *ChattoClient) roomToChatInfo(ctx context.Context, rws *apiv1.RoomWithVi
 					MemberMap: make(bridgev2.ChatMemberMap, len(members)),
 				}
 				for _, uid := range members {
+					if c.Main.IsGhostBot(ctx, uid) {
+						continue
+					}
 					info.Members.MemberMap.Set(c.makeMember(uid))
 				}
 				// Our own login is always a member if it can see the room as one.

@@ -195,6 +195,7 @@ func New() *Server {
 	mount(apiv1connect.NewMessageServiceHandler(&messageService{s: s}, opts...))
 	mount(apiv1connect.NewAssetUploadServiceHandler(&uploadService{s: s}, opts...))
 	mount(apiv1connect.NewRoomInvitationServiceHandler(&invitationService{s: s}, opts...))
+	mount(apiv1connect.NewBotServiceHandler(&botService{s: s}, opts...))
 	mount(adminv1connect.NewAdminPermissionServiceHandler(&adminPermissionService{s: s}, opts...))
 	mux.HandleFunc("POST /auth/login", s.handleLogin)
 	mux.HandleFunc("POST /oauth/token", s.handleToken)

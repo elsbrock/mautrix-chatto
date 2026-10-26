@@ -16,6 +16,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/event"
 
+	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
 	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
 )
 
@@ -55,7 +56,7 @@ var ErrFileTooLarge = bridgev2.WrapErrorInStatus(errors.New("file is larger than
 
 // uploadMatrixMedia downloads a Matrix file and uploads it to Chatto in
 // chunks, returning the asset ID to attach.
-func (c *ChattoClient) uploadMatrixMedia(ctx context.Context, roomID string, content *event.MessageEventContent) (string, error) {
+func (c *ChattoClient) uploadMatrixMedia(ctx context.Context, api *chattoclient.Client, roomID string, content *event.MessageEventContent) (string, error) {
 	limit := c.maxUploadSize(ctx)
 	if content.Info != nil && content.Info.Size > 0 && int64(content.Info.Size) > limit {
 		return "", ErrFileTooLarge
@@ -85,13 +86,13 @@ func (c *ChattoClient) uploadMatrixMedia(ctx context.Context, roomID string, con
 			filename += exts[0]
 		}
 	}
-	return c.uploadAsset(ctx, roomID, filename, mimeType, data)
+	return c.uploadAsset(ctx, api, roomID, filename, mimeType, data)
 }
 
 // uploadAsset runs Chatto's chunked upload protocol.
-func (c *ChattoClient) uploadAsset(ctx context.Context, roomID, filename, contentType string, data []byte) (string, error) {
+func (c *ChattoClient) uploadAsset(ctx context.Context, api *chattoclient.Client, roomID, filename, contentType string, data []byte) (string, error) {
 	sum := sha256.Sum256(data)
-	created, err := c.api.AssetUploads.CreateUpload(ctx, connect.NewRequest(&apiv1.CreateUploadRequest{
+	created, err := api.AssetUploads.CreateUpload(ctx, connect.NewRequest(&apiv1.CreateUploadRequest{
 		RoomId:      roomID,
 		Filename:    filename,
 		ContentType: contentType,
@@ -111,24 +112,24 @@ func (c *ChattoClient) uploadAsset(ctx context.Context, roomID, filename, conten
 		end := min(offset+chunkSize, int64(len(data)))
 		chunk := data[offset:end]
 		chunkSum := sha256.Sum256(chunk)
-		resp, err := c.api.AssetUploads.UploadChunk(ctx, connect.NewRequest(&apiv1.UploadChunkRequest{
+		resp, err := api.AssetUploads.UploadChunk(ctx, connect.NewRequest(&apiv1.UploadChunkRequest{
 			UploadId:    upload.GetUploadId(),
 			Offset:      offset,
 			Content:     bytes.Clone(chunk),
 			ChunkSha256: hex.EncodeToString(chunkSum[:]),
 		}))
 		if err != nil {
-			c.cancelUpload(ctx, upload.GetUploadId())
+			cancelUpload(ctx, api, upload.GetUploadId())
 			return "", wrapSendError(err)
 		}
 		next := resp.Msg.GetUpload().GetCommittedOffset()
 		if next <= offset {
-			c.cancelUpload(ctx, upload.GetUploadId())
+			cancelUpload(ctx, api, upload.GetUploadId())
 			return "", fmt.Errorf("chatto upload made no progress at offset %d", offset)
 		}
 		offset = next
 	}
-	done, err := c.api.AssetUploads.CompleteUpload(ctx, connect.NewRequest(&apiv1.CompleteUploadRequest{UploadId: upload.GetUploadId()}))
+	done, err := api.AssetUploads.CompleteUpload(ctx, connect.NewRequest(&apiv1.CompleteUploadRequest{UploadId: upload.GetUploadId()}))
 	if err != nil {
 		return "", wrapSendError(err)
 	}
@@ -142,8 +143,8 @@ func (c *ChattoClient) uploadAsset(ctx context.Context, roomID, filename, conten
 	return assetID, nil
 }
 
-func (c *ChattoClient) cancelUpload(ctx context.Context, uploadID string) {
-	_, err := c.api.AssetUploads.CancelUpload(context.WithoutCancel(ctx), connect.NewRequest(&apiv1.CancelUploadRequest{UploadId: uploadID}))
+func cancelUpload(ctx context.Context, api *chattoclient.Client, uploadID string) {
+	_, err := api.AssetUploads.CancelUpload(context.WithoutCancel(ctx), connect.NewRequest(&apiv1.CancelUploadRequest{UploadId: uploadID}))
 	if err != nil {
 		zerolog.Ctx(ctx).Debug().Err(err).Msg("Failed to cancel upload")
 	}
