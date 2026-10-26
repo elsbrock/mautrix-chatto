@@ -281,7 +281,7 @@ per-user <em>ghost bots</em> that post under their own name.</p>
 <ul>
   <li><strong>Several servers.</strong> Add an entry to <code>network.servers</code> and restart. Each server appears as its own space.</li>
   <li><strong>Metrics.</strong> <code>/metrics</code>, <code>/healthz</code> and <code>/readyz</code>, covering connection state, event lag, RPC latency and bridging failures.</li>
-  <li><strong>Dashboards and alerts.</strong> A Grafana dashboard and Prometheus alert rules are in <a href="https://github.com/elsbrock/mautrix-chatto/tree/main/deploy/monitoring"><code>deploy/monitoring</code></a>. The NixOS module adds both when Prometheus is enabled.</li>
+  <li><strong>Dashboards and alerts.</strong> A Grafana dashboard and Prometheus alert rules are in <a href="https://github.com/elsbrock/mautrix-chatto/tree/main/deploy/monitoring"><code>deploy/monitoring</code></a>. The NixOS module adds the alert rules to a local Prometheus and the dashboard to a local Grafana.</li>
   <li><strong>Server version.</strong> Each bridge release is built against one pinned Chatto release. An older server is logged at startup, or refused with <code>network.strict_server_version</code>. Chatto 0.4 is not supported.</li>
 </ul>
 

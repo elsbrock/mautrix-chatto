@@ -220,6 +220,13 @@ in
       description = "Whether to add the bridge's alerting rules to the local Prometheus.";
     };
 
+    grafanaDashboard = lib.mkOption {
+      type = lib.types.bool;
+      default = config.services.grafana.enable;
+      defaultText = lib.literalExpression "config.services.grafana.enable";
+      description = "Whether to provision the bridge's dashboard in the local Grafana.";
+    };
+
     serviceDependencies = lib.mkOption {
       type = with lib.types; listOf str;
       default =
@@ -328,6 +335,15 @@ in
     ];
 
     services.prometheus.ruleFiles = lib.mkIf cfg.alertRules [ ../deploy/monitoring/alerts.yaml ];
+
+    services.grafana.provision.dashboards.settings.providers = lib.mkIf cfg.grafanaDashboard [
+      {
+        name = "mautrix-chatto";
+        options.path = pkgs.linkFarm "mautrix-chatto-dashboards" {
+          "mautrix-chatto.json" = ../deploy/monitoring/grafana-dashboard.json;
+        };
+      }
+    ];
 
     systemd.services.mautrix-chatto = {
       description = "mautrix-chatto, a Matrix-Chatto puppeting bridge";
