@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -88,9 +89,11 @@ func newHarness(t *testing.T, opts ...harnessOpt) *harness {
 		t.Fatal(err)
 	}
 	mx := newMockMatrix()
-	log := zerolog.New(zerolog.NewTestWriter(t)).Level(zerolog.WarnLevel)
+	// Bridge goroutines may still log after a test ends, which t.Log does
+	// not allow, so logs go to stderr (verbose) or nowhere.
+	log := zerolog.Nop()
 	if testing.Verbose() {
-		log = log.Level(zerolog.DebugLevel)
+		log = zerolog.New(os.Stderr).With().Str("test", t.Name()).Logger().Level(zerolog.DebugLevel)
 	}
 	br := bridgev2.NewBridge("chatto", db, log, cfg, mx, conn, commands.NewProcessor)
 	ctx, cancel := context.WithCancel(log.WithContext(context.Background()))
