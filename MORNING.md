@@ -106,7 +106,7 @@ against a running Chatto. Most worth checking first:
 
 ## Known gaps
 
-- **Pins:** not bridged.
+- **Pins:** only Chatto → Matrix (bridgev2 doesn't pass Matrix pin changes to connectors).
 - **Power levels:** Chatto roles are not mapped to Matrix.
 - **Read receipts:** only your own Chatto read state is visible (Chatto
   doesn't expose others').
@@ -125,7 +125,7 @@ against a running Chatto. Most worth checking first:
 
 1. Run it against your Chatto and fix whatever the real server disagrees with
    (start with the realtime handshake and attachments).
-2. Pins and role → power level mapping.
+2. Role → power level mapping.
 3. Container image and goreleaser for non-Nix users.
 4. Upstream: ask Chatto for an appservice-style API (posting as other users,
    or a per-message display name). It would make ghost bots unnecessary.

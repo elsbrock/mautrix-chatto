@@ -4,7 +4,7 @@ Living, prioritised list. The top item is next.
 
 ## Next
 - [ ] Try against a real Chatto 0.5 server and homeserver (see MORNING.md checklist)
-- [ ] Pins: map `message_pinned`/`unpinned` to `m.room.pinned_events`
+- [ ] Pins from Matrix to Chatto (needs a bridgev2 hook for m.room.pinned_events)
 - [ ] Map Chatto roles to Matrix power levels (read-only)
 - [ ] Bridge Matrix room invites of ghosts into DMs for bot logins (currently Chatto forbids bot DMs)
 - [ ] Batch member and backfill-need checks after a snapshot on large servers

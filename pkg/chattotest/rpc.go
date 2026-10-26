@@ -978,3 +978,16 @@ func (us *userService) UpdateUserProfile(ctx context.Context, req *connect.Reque
 	}
 	return connect.NewResponse(&apiv1.UpdateUserProfileResponse{User: us.s.userProtoLocked(u)}), nil
 }
+
+func (rs *roomService) ListPinnedMessages(ctx context.Context, req *connect.Request[apiv1.ListPinnedMessagesRequest]) (*connect.Response[apiv1.ListPinnedMessagesResponse], error) {
+	rs.s.mu.Lock()
+	defer rs.s.mu.Unlock()
+	if _, err := rs.s.memberRoomLocked(req.Msg.GetRoomId(), viewerID(ctx)); err != nil {
+		return nil, err
+	}
+	resp := &apiv1.ListPinnedMessagesResponse{Page: &apiv1.PageInfo{}}
+	for _, id := range rs.s.pins[req.Msg.GetRoomId()] {
+		resp.PinnedMessages = append(resp.PinnedMessages, &apiv1.PinnedMessage{Message: rs.s.messageProtoLocked(rs.s.messages[id], viewerID(ctx))})
+	}
+	return connect.NewResponse(resp), nil
+}

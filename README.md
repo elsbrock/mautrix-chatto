@@ -42,7 +42,7 @@ homeserver:
 | Group DMs | ✅ | ❌ | Chatto no longer lets anyone create new group DMs |
 | Archived and deleted rooms | ✅ | ➖ | Archived rooms get a notice and topic marker, and sends are refused |
 | Voice calls | 🟡 | ❌ | Start and end notices; no media bridging |
-| Pins | ❌ | ❌ | Not bridged yet |
+| Pins | ✅ | ❌ | Chatto pins set `m.room.pinned_events`; bridgev2 has no hook for pins made on Matrix |
 | Room invitations | 🟡 | ➖ | Human accounts get a notice and an `accept-invite` command |
 | Backfill | ✅ | ➖ | Initial history, threads, and forward fill after downtime |
 | Double puppeting | ✅ | ✅ | bridgev2 built-in |

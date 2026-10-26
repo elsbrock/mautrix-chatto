@@ -142,6 +142,7 @@ type Server struct {
 	readMarkers map[string]string // userID/roomID → event ID
 	idem        map[string]string // userID/key → message ID
 	authCodes   map[string]AuthCode
+	pins        map[string][]string // room ID → pinned message IDs
 	Permissions []Permission
 	TypingCalls []string // "userID/roomID" per RefreshTypingIndicator call
 	Calls       []string // procedures called, in order
@@ -765,4 +766,26 @@ func (s *Server) RevokeSessions(userID string) {
 			delete(s.refresh, tok)
 		}
 	}
+}
+
+// Pin pins a message and publishes the change.
+func (s *Server) Pin(messageID string, pinned bool) {
+	s.mu.Lock()
+	m := s.messages[messageID]
+	if s.pins == nil {
+		s.pins = make(map[string][]string)
+	}
+	list := slices.DeleteFunc(s.pins[m.RoomID], func(id string) bool { return id == messageID })
+	if pinned {
+		list = append(list, messageID)
+	}
+	s.pins[m.RoomID] = list
+	s.mu.Unlock()
+	evt := &realtimev1.RealtimeEvent{}
+	if pinned {
+		evt.Event = &realtimev1.RealtimeEvent_MessagePinned{MessagePinned: &realtimev1.MessagePinnedEvent{RoomId: m.RoomID, MessageEventId: messageID}}
+	} else {
+		evt.Event = &realtimev1.RealtimeEvent_MessageUnpinned{MessageUnpinned: &realtimev1.MessageUnpinnedEvent{RoomId: m.RoomID, MessageEventId: messageID}}
+	}
+	s.Publish(m.RoomID, "", evt)
 }

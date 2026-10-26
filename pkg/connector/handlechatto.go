@@ -300,6 +300,10 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 		if c.Main.Config.CallNotices {
 			c.sendRoomNotice(ctx, e.VoiceCallEnded.GetRoomId(), "", ts, "📞 The call on Chatto ended")
 		}
+	case *realtimev1.RealtimeEvent_MessagePinned:
+		c.syncPins(ctx, e.MessagePinned.GetRoomId())
+	case *realtimev1.RealtimeEvent_MessageUnpinned:
+		c.syncPins(ctx, e.MessageUnpinned.GetRoomId())
 	case *realtimev1.RealtimeEvent_RoomLayoutChanged:
 		c.syncAllRooms(ctx)
 	case *realtimev1.RealtimeEvent_RoomInvitationCreated:

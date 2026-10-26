@@ -7,6 +7,7 @@ import (
 
 	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
@@ -209,4 +210,28 @@ func (c *Connector) newClientMust(t *testing.T) *chattoclient.Client {
 		t.Fatal(err)
 	}
 	return client
+}
+
+func TestPinsReachMatrix(t *testing.T) {
+	w := newWorld(t)
+	portal := w.portal(w.room.ID)
+	msg := w.srv.PostMessage(w.bob.ID, w.room.ID, "pin me")
+	evt := w.waitMessage(portal.MXID, "pin me")
+	w.eventually("db entry", func() bool { return len(w.dbMessage(msg.ID)) == 1 })
+	pinnedState := func() []id.EventID {
+		var last []id.EventID
+		for _, e := range w.mx.Events(func(e *sentEvent) bool { return e.Type == event.StatePinnedEvents && e.RoomID == portal.MXID }) {
+			_ = e.Content.ParseRaw(e.Type)
+			if c, ok := e.Content.Parsed.(*event.PinnedEventsEventContent); ok {
+				last = c.Pinned
+			}
+		}
+		return last
+	}
+	w.srv.Pin(msg.ID, true)
+	w.eventually("pinned", func() bool { p := pinnedState(); return len(p) == 1 && p[0] == evt.ID })
+	w.srv.Pin(msg.ID, false)
+	w.eventually("unpinned", func() bool {
+		return len(pinnedState()) == 0 && len(w.mx.Events(func(e *sentEvent) bool { return e.Type == event.StatePinnedEvents })) == 2
+	})
 }
