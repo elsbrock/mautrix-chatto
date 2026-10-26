@@ -85,7 +85,7 @@ GitHub Actions runs lint, race tests, fuzzing, a generated-code drift check,
    services.mautrix-chatto = {
      enable = true;
      settings = {
-       network.server_url = "https://chat.example.com";   # your Chatto
+       network.servers = [ { id = "main"; url = "https://chat.example.com"; } ];   # your Chatto; id never changes
        homeserver = { address = "http://127.0.0.1:8008"; domain = "example.com"; };
        bridge.permissions = { "example.com" = "user"; "@you:example.com" = "admin"; };
      };

@@ -58,20 +58,20 @@ groups:
 
       - alert: MautrixChattoRPCErrors
         expr: |
-          sum by (instance) (rate(mautrix_chatto_rpc_errors_total{code!~"not_found|permission_denied|already_exists"}[10m]))
-            / sum by (instance) (rate(mautrix_chatto_rpc_duration_seconds_count[10m])) > 0.1
+          sum by (instance, server) (rate(mautrix_chatto_rpc_errors_total{code!~"not_found|permission_denied|already_exists"}[10m]))
+            / sum by (instance, server) (rate(mautrix_chatto_rpc_duration_seconds_count[10m])) > 0.1
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: Chatto API calls are failing
-          description: More than 10% of Chatto RPCs fail on {{ $labels.instance }}.
+          description: More than 10% of RPCs to Chatto server {{ $labels.server }} fail on {{ $labels.instance }}.
 
       - alert: MautrixChattoUnsupportedServer
-        expr: max by (instance) (mautrix_chatto_chatto_server_info{supported="false"}) == 1
+        expr: max by (instance, server, version) (mautrix_chatto_chatto_server_info{supported="false"}) == 1
         for: 1h
         labels:
           severity: info
         annotations:
           summary: Chatto server is older than the bridge's protocol version
-          description: Chatto {{ $labels.version }} is older than the protos this bridge was built against; some features may fail.
+          description: Chatto server {{ $labels.server }} runs {{ $labels.version }}, older than the protos this bridge was built against; some features may fail.

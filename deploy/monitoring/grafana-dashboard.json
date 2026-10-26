@@ -185,8 +185,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (version) (mautrix_chatto_chatto_server_info{job=~\"$job\"})",
-          "legendFormat": "{{version}}",
+          "expr": "max by (server, version) (mautrix_chatto_chatto_server_info{job=~\"$job\"})",
+          "legendFormat": "{{server}}: {{version}}",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -483,8 +483,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, procedure) (rate(mautrix_chatto_rpc_duration_seconds_bucket{job=~\"$job\"}[$__rate_interval])))",
-          "legendFormat": "{{procedure}}",
+          "expr": "histogram_quantile(0.95, sum by (le, server, procedure) (rate(mautrix_chatto_rpc_duration_seconds_bucket{job=~\"$job\"}[$__rate_interval])))",
+          "legendFormat": "{{server}} {{procedure}}",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -529,8 +529,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (procedure, code) (rate(mautrix_chatto_rpc_errors_total{job=~\"$job\"}[$__rate_interval]))",
-          "legendFormat": "{{procedure}} {{code}}",
+          "expr": "sum by (server, procedure, code) (rate(mautrix_chatto_rpc_errors_total{job=~\"$job\"}[$__rate_interval]))",
+          "legendFormat": "{{server}} {{procedure}} {{code}}",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"

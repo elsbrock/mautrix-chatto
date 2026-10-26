@@ -86,7 +86,8 @@ let
 
   defaultConfig = {
     network = {
-      server_url = "";
+      servers = [ ];
+      group_spaces = false;
       displayname_template = "{{or .DisplayName .Login}}{{if .IsBot}} (bot){{end}}";
       sync_presence = true;
       keep_logins_online = false;
@@ -163,7 +164,7 @@ in
       '';
       example = lib.literalExpression ''
         {
-          network.server_url = "https://chat.example.com";
+          network.servers = [ { id = "main"; url = "https://chat.example.com"; } ];
           homeserver = {
             address = "http://[::1]:8008";
             domain = "example.com";
@@ -249,8 +250,8 @@ in
   config = lib.mkIf cfg.enable {
     assertions = [
       {
-        assertion = cfg.settings.network.server_url != "";
-        message = "services.mautrix-chatto.settings.network.server_url must be set to your Chatto server.";
+        assertion = cfg.settings.network.servers != [ ];
+        message = "services.mautrix-chatto.settings.network.servers must list at least one Chatto server ({ id = \"main\"; url = \"https://chat.example.com\"; }).";
       }
       {
         assertion = cfg.settings.homeserver.domain or "" != "";

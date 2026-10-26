@@ -3,10 +3,11 @@
 A Matrix ↔ [Chatto](https://chatto.run) puppeting bridge, built on
 [mautrix-go](https://github.com/mautrix/go) bridgev2.
 
-It connects one Chatto server (0.5 line, realtime protocol v4) to your Matrix
-homeserver:
-- Chatto channels, DMs and group DMs become Matrix rooms.
-- Room groups become spaces.
+It connects one or more Chatto servers (0.5 line, realtime protocol v4) to
+your Matrix homeserver:
+- Each Chatto server becomes a Matrix space.
+- Chatto channels, DMs and group DMs become Matrix rooms in that space.
+- Room groups can optionally become subspaces (`network.group_spaces`).
 - Messages, edits, deletions, reactions, replies, threads, attachments,
   typing, read state and presence flow both ways.
 
@@ -108,7 +109,9 @@ It grants `room.list`, `room.join`, `message.read`, `message.post`,
           services.mautrix-chatto = {
             enable = true;
             settings = {
-              network.server_url = "https://chat.example.com";
+              # id is permanent: it is part of every bridged ID, including
+              # ghost Matrix IDs. Only url may change later.
+              network.servers = [ { id = "main"; url = "https://chat.example.com"; } ];
               homeserver = {
                 address = "http://127.0.0.1:8008";
                 domain = "example.com";
@@ -139,7 +142,7 @@ It grants `room.list`, `room.join`, `message.read`, `message.post`,
 ```sh
 nix build github:elsbrock/matrix-chatto-bridge   # or: go build -tags goolm ./cmd/mautrix-chatto
 ./result/bin/mautrix-chatto -e -c config.yaml    # writes the example config
-$EDITOR config.yaml                              # network.server_url, homeserver.*, bridge.permissions
+$EDITOR config.yaml                              # network.servers, homeserver.*, bridge.permissions
 ./result/bin/mautrix-chatto -g -c config.yaml -r registration.yaml
 ./result/bin/mautrix-chatto -c config.yaml -r registration.yaml
 ```

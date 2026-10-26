@@ -149,7 +149,12 @@
                   system.stateVersion = "26.05";
                   services.mautrix-chatto = {
                     enable = true;
-                    settings.network.server_url = "https://chat.example.com";
+                    settings.network.servers = [
+                      {
+                        id = "main";
+                        url = "https://chat.example.com";
+                      }
+                    ];
                     settings.homeserver.domain = "example.com";
                     metrics.enable = true;
                   };
