@@ -22,10 +22,39 @@
         mautrix-chatto = final.callPackage ./nix/package.nix { inherit rev; };
       };
 
-      packages = forAllSystems (pkgs: rec {
-        mautrix-chatto = pkgs.callPackage ./nix/package.nix { inherit rev; };
-        default = mautrix-chatto;
-      });
+      packages = forAllSystems (
+        pkgs:
+        let
+          mautrix-chatto = pkgs.callPackage ./nix/package.nix { inherit rev; };
+        in
+        {
+          inherit mautrix-chatto;
+          default = mautrix-chatto;
+        }
+        // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          # OCI image: docker load < result; config and data live in /data.
+          docker = pkgs.dockerTools.buildLayeredImage {
+            name = "mautrix-chatto";
+            tag = "latest";
+            contents = [ pkgs.cacert ];
+            config = {
+              Entrypoint = [ (pkgs.lib.getExe mautrix-chatto) ];
+              Cmd = [
+                "-c"
+                "/data/config.yaml"
+                "-r"
+                "/data/registration.yaml"
+              ];
+              WorkingDir = "/data";
+              Volumes."/data" = { };
+              ExposedPorts = {
+                "29340/tcp" = { };
+                "8001/tcp" = { };
+              };
+            };
+          };
+        }
+      );
 
       nixosModules = rec {
         mautrix-chatto = {

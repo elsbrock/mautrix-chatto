@@ -149,6 +149,16 @@ Register `registration.yaml` with your homeserver:
 [example-config.yaml](example-config.yaml) is the complete annotated config.
 The Chatto-specific part is the `network:` section.
 
+## Container image
+
+```sh
+nix build github:elsbrock/matrix-chatto-bridge#docker && docker load < result
+docker run --rm -v $PWD/data:/data mautrix-chatto -e -c /data/config.yaml   # write a config
+# edit data/config.yaml: set appservice.hostname to 0.0.0.0, then
+docker run --rm -v $PWD/data:/data mautrix-chatto -g -c /data/config.yaml -r /data/registration.yaml
+docker run -d -v $PWD/data:/data -p 29340:29340 mautrix-chatto
+```
+
 ## Monitoring
 
 - Enable `network.metrics.enabled` to serve these on `network.metrics.listen`:

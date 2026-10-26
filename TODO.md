@@ -11,7 +11,7 @@ Living, prioritised list. The top item is next.
       (currently one ListMembers and one GetRoomEvents per room)
 - [ ] Direct media (serve Chatto signed URLs through the bridge instead of reuploading)
 - [ ] Image dimensions and thumbnails for Matrix → Chatto uploads
-- [ ] goreleaser config and container image
+- [ ] goreleaser config and published release binaries
 
 ## Done
 - [x] Vendor protos, generate connect-go (pkg/chattopb), sync script
