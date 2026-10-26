@@ -211,6 +211,8 @@ docker run -d -v $PWD/data:/data -p 29340:29340 mautrix-chatto
 - [`deploy/monitoring/grafana-dashboard.json`](deploy/monitoring/grafana-dashboard.json)
   is a ready-made dashboard. The NixOS module provisions it when
   `services.grafana` is enabled (`services.mautrix-chatto.grafanaDashboard`).
+  Its Chatto server selector sums over the chosen servers; the collapsed
+  "Per server" row compares them side by side.
 - [`deploy/monitoring/alerts.yaml`](deploy/monitoring/alerts.yaml) has
   Prometheus alert rules for a dead endpoint, disconnected logins, logins
   needing re-auth, reconnect storms, event lag, bridging errors, RPC error

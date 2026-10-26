@@ -43,15 +43,55 @@
           "value": "$__all"
         },
         "refresh": 2
+      },
+      {
+        "name": "server",
+        "type": "query",
+        "label": "Chatto server",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(mautrix_chatto_chatto_server_info{job=~\"$job\"}, server)",
+          "refId": "server"
+        },
+        "definition": "label_values(mautrix_chatto_chatto_server_info{job=~\"$job\"}, server)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 2
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "name": "Restarts",
+        "enable": true,
+        "iconColor": "orange",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "expr": "changes(process_start_time_seconds{job=~\"$job\"}[2m]) > 0",
+        "step": "1m",
+        "titleFormat": "Bridge restarted",
+        "textFormat": "{{instance}}"
       }
     ]
   },
   "panels": [
     {
       "id": 1,
-      "title": "Connected logins",
+      "title": "Up",
       "type": "stat",
-      "description": "",
+      "description": "Whether Prometheus can scrape every selected bridge",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -59,14 +99,14 @@
       "gridPos": {
         "x": 0,
         "y": 0,
-        "w": 6,
+        "w": 4,
         "h": 4
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(mautrix_chatto_logins{job=~\"$job\",state=\"CONNECTED\"})",
-          "legendFormat": "connected",
+          "expr": "min(up{job=~\"$job\"})",
+          "legendFormat": "",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -74,7 +114,36 @@
         }
       ],
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "red"
+              },
+              {
+                "value": 1,
+                "color": "green"
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
         "overrides": []
       },
       "options": {
@@ -83,53 +152,13 @@
             "lastNotNull"
           ]
         },
-        "colorMode": "value",
+        "colorMode": "background",
         "graphMode": "none"
       }
     },
     {
       "id": 2,
-      "title": "Logins needing attention",
-      "type": "stat",
-      "description": "Logins that need the user to log in again",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 6,
-        "y": 0,
-        "w": 6,
-        "h": 4
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum(mautrix_chatto_logins{job=~\"$job\",state=~\"BAD_CREDENTIALS|UNKNOWN_ERROR|LOGGED_OUT\"})",
-          "legendFormat": "bad",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "colorMode": "value",
-        "graphMode": "none"
-      }
-    },
-    {
-      "id": 3,
-      "title": "Realtime sockets up",
+      "title": "Bridge version",
       "type": "stat",
       "description": "",
       "datasource": {
@@ -137,56 +166,16 @@
         "uid": "${datasource}"
       },
       "gridPos": {
-        "x": 12,
+        "x": 4,
         "y": 0,
-        "w": 6,
+        "w": 4,
         "h": 4
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(mautrix_chatto_realtime_connected{job=~\"$job\"})",
-          "legendFormat": "up",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "colorMode": "value",
-        "graphMode": "none"
-      }
-    },
-    {
-      "id": 4,
-      "title": "Chatto server version",
-      "type": "stat",
-      "description": "",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 18,
-        "y": 0,
-        "w": 6,
-        "h": 4
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "max by (server, version) (mautrix_chatto_chatto_server_info{job=~\"$job\"})",
-          "legendFormat": "{{server}}: {{version}}",
+          "expr": "max by (version) (mautrix_chatto_build_info{job=~\"$job\"})",
+          "legendFormat": "{{version}}",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -209,7 +198,210 @@
       }
     },
     {
+      "id": 3,
+      "title": "Chatto server version",
+      "type": "stat",
+      "description": "Red when the server is older than the protos this bridge was built against",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (server, version) (mautrix_chatto_chatto_server_info{job=~\"$job\",server=~\"$server\",supported=\"true\"} or mautrix_chatto_chatto_server_info{job=~\"$job\",server=~\"$server\",supported=\"false\"} * 0)",
+          "legendFormat": "{{server}} {{version}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "red"
+              },
+              {
+                "value": 1,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "name"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Connected logins",
+      "type": "stat",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(mautrix_chatto_logins{job=~\"$job\",server=~\"$server\",state=\"CONNECTED\"})",
+          "legendFormat": "connected",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
       "id": 5,
+      "title": "Logins without realtime",
+      "type": "stat",
+      "description": "Logins that report connected but have no realtime socket",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "clamp_min(sum(mautrix_chatto_logins{job=~\"$job\",server=~\"$server\",state=\"CONNECTED\"}) - (sum(mautrix_chatto_realtime_connected{job=~\"$job\",server=~\"$server\"}) or vector(0)), 0)",
+          "legendFormat": "missing",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 1,
+                "color": "red"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 6,
+      "title": "Logins needing attention",
+      "type": "stat",
+      "description": "Logins that need the user to log in again",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(mautrix_chatto_logins{job=~\"$job\",server=~\"$server\",state=~\"BAD_CREDENTIALS|UNKNOWN_ERROR|LOGGED_OUT\"})",
+          "legendFormat": "bad",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 1,
+                "color": "red"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 7,
       "title": "Messages bridged",
       "type": "timeseries",
       "description": "",
@@ -226,7 +418,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (direction, type) (rate(mautrix_chatto_messages_bridged_total{job=~\"$job\"}[$__rate_interval]))",
+          "expr": "sum by (direction, type) (rate(mautrix_chatto_messages_bridged_total{job=~\"$job\",server=~\"$server\"}[$__rate_interval]))",
           "legendFormat": "{{direction}} {{type}}",
           "datasource": {
             "type": "prometheus",
@@ -255,7 +447,7 @@
       }
     },
     {
-      "id": 6,
+      "id": 8,
       "title": "Bridge errors",
       "type": "timeseries",
       "description": "",
@@ -272,7 +464,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (direction, type) (rate(mautrix_chatto_bridge_errors_total{job=~\"$job\"}[$__rate_interval]))",
+          "expr": "sum by (direction, type) (rate(mautrix_chatto_bridge_errors_total{job=~\"$job\",server=~\"$server\"}[$__rate_interval]))",
           "legendFormat": "{{direction}} {{type}}",
           "datasource": {
             "type": "prometheus",
@@ -301,10 +493,10 @@
       }
     },
     {
-      "id": 7,
-      "title": "Realtime event lag",
+      "id": 9,
+      "title": "Error ratios",
       "type": "timeseries",
-      "description": "Time between an event's creation on Chatto and its arrival at the bridge",
+      "description": "Share of events that failed to bridge, and of RPCs to Chatto that failed",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -318,7 +510,62 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(mautrix_chatto_realtime_event_lag_seconds_bucket{job=~\"$job\"}[$__rate_interval])))",
+          "expr": "sum by (direction) (rate(mautrix_chatto_bridge_errors_total{job=~\"$job\",server=~\"$server\"}[$__rate_interval])) / (sum by (direction) (rate(mautrix_chatto_messages_bridged_total{job=~\"$job\",server=~\"$server\"}[$__rate_interval])) + sum by (direction) (rate(mautrix_chatto_bridge_errors_total{job=~\"$job\",server=~\"$server\"}[$__rate_interval])))",
+          "legendFormat": "bridge {{direction}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(mautrix_chatto_rpc_errors_total{job=~\"$job\",server=~\"$server\"}[$__rate_interval])) / sum(rate(mautrix_chatto_rpc_duration_seconds_count{job=~\"$job\",server=~\"$server\"}[$__rate_interval]))",
+          "legendFormat": "rpc",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Realtime event lag",
+      "type": "timeseries",
+      "description": "Time between an event's creation on Chatto and its arrival at the bridge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(mautrix_chatto_realtime_event_lag_seconds_bucket{job=~\"$job\",server=~\"$server\"}[$__rate_interval])))",
           "legendFormat": "p50",
           "datasource": {
             "type": "prometheus",
@@ -327,7 +574,7 @@
         },
         {
           "refId": "B",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(mautrix_chatto_realtime_event_lag_seconds_bucket{job=~\"$job\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(mautrix_chatto_realtime_event_lag_seconds_bucket{job=~\"$job\",server=~\"$server\"}[$__rate_interval])))",
           "legendFormat": "p95",
           "datasource": {
             "type": "prometheus",
@@ -336,7 +583,7 @@
         },
         {
           "refId": "C",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(mautrix_chatto_realtime_event_lag_seconds_bucket{job=~\"$job\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(mautrix_chatto_realtime_event_lag_seconds_bucket{job=~\"$job\",server=~\"$server\"}[$__rate_interval])))",
           "legendFormat": "p99",
           "datasource": {
             "type": "prometheus",
@@ -365,7 +612,7 @@
       }
     },
     {
-      "id": 8,
+      "id": 11,
       "title": "Realtime reconnects and recoveries",
       "type": "timeseries",
       "description": "Recoveries other than 'resumed' trigger a forward fill",
@@ -374,15 +621,15 @@
         "uid": "${datasource}"
       },
       "gridPos": {
-        "x": 12,
-        "y": 12,
+        "x": 0,
+        "y": 20,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (reason) (increase(mautrix_chatto_realtime_reconnects_total{job=~\"$job\"}[$__rate_interval]))",
+          "expr": "sum by (reason) (increase(mautrix_chatto_realtime_reconnects_total{job=~\"$job\",server=~\"$server\"}[$__rate_interval]))",
           "legendFormat": "reconnect: {{reason}}",
           "datasource": {
             "type": "prometheus",
@@ -391,7 +638,7 @@
         },
         {
           "refId": "B",
-          "expr": "sum by (result) (increase(mautrix_chatto_realtime_recoveries_total{job=~\"$job\"}[$__rate_interval]))",
+          "expr": "sum by (result) (increase(mautrix_chatto_realtime_recoveries_total{job=~\"$job\",server=~\"$server\"}[$__rate_interval]))",
           "legendFormat": "recovery: {{result}}",
           "datasource": {
             "type": "prometheus",
@@ -420,7 +667,7 @@
       }
     },
     {
-      "id": 9,
+      "id": 12,
       "title": "Realtime events by type",
       "type": "timeseries",
       "description": "",
@@ -429,7 +676,7 @@
         "uid": "${datasource}"
       },
       "gridPos": {
-        "x": 0,
+        "x": 12,
         "y": 20,
         "w": 12,
         "h": 8
@@ -437,7 +684,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (type) (rate(mautrix_chatto_realtime_events_total{job=~\"$job\"}[$__rate_interval]))",
+          "expr": "sum by (type) (rate(mautrix_chatto_realtime_events_total{job=~\"$job\",server=~\"$server\"}[$__rate_interval]))",
           "legendFormat": "{{type}}",
           "datasource": {
             "type": "prometheus",
@@ -466,54 +713,8 @@
       }
     },
     {
-      "id": 10,
-      "title": "RPC latency p95 by method",
-      "type": "timeseries",
-      "description": "",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 20,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, server, procedure) (rate(mautrix_chatto_rpc_duration_seconds_bucket{job=~\"$job\"}[$__rate_interval])))",
-          "legendFormat": "{{server}} {{procedure}}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "mean",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      }
-    },
-    {
-      "id": 11,
-      "title": "RPC errors by method and code",
+      "id": 13,
+      "title": "RPC calls by method",
       "type": "timeseries",
       "description": "",
       "datasource": {
@@ -529,8 +730,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (server, procedure, code) (rate(mautrix_chatto_rpc_errors_total{job=~\"$job\"}[$__rate_interval]))",
-          "legendFormat": "{{server}} {{procedure}} {{code}}",
+          "expr": "sum by (procedure) (rate(mautrix_chatto_rpc_duration_seconds_count{job=~\"$job\",server=~\"$server\"}[$__rate_interval]))",
+          "legendFormat": "{{procedure}}",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -558,8 +759,8 @@
       }
     },
     {
-      "id": 12,
-      "title": "Token refreshes",
+      "id": 14,
+      "title": "RPC latency p95 by method",
       "type": "timeseries",
       "description": "",
       "datasource": {
@@ -575,7 +776,99 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (result) (increase(mautrix_chatto_token_refreshes_total{job=~\"$job\"}[$__rate_interval]))",
+          "expr": "histogram_quantile(0.95, sum by (le, procedure) (rate(mautrix_chatto_rpc_duration_seconds_bucket{job=~\"$job\",server=~\"$server\"}[$__rate_interval])))",
+          "legendFormat": "{{procedure}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "title": "RPC errors by method and code",
+      "type": "timeseries",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (procedure, code) (rate(mautrix_chatto_rpc_errors_total{job=~\"$job\",server=~\"$server\"}[$__rate_interval]))",
+          "legendFormat": "{{procedure}} {{code}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "title": "Token refreshes",
+      "type": "timeseries",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (result) (increase(mautrix_chatto_token_refreshes_total{job=~\"$job\",server=~\"$server\"}[$__rate_interval]))",
           "legendFormat": "{{result}}",
           "datasource": {
             "type": "prometheus",
@@ -604,7 +897,7 @@
       }
     },
     {
-      "id": 13,
+      "id": 17,
       "title": "Memory",
       "type": "timeseries",
       "description": "",
@@ -614,7 +907,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 36,
+        "y": 44,
         "w": 12,
         "h": 8
       },
@@ -659,7 +952,7 @@
       }
     },
     {
-      "id": 14,
+      "id": 18,
       "title": "Goroutines and CPU",
       "type": "timeseries",
       "description": "",
@@ -669,7 +962,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 36,
+        "y": 44,
         "w": 12,
         "h": 8
       },
@@ -712,6 +1005,296 @@
           "mode": "multi"
         }
       }
+    },
+    {
+      "id": 19,
+      "type": "row",
+      "title": "Per server",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 52,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "id": 20,
+          "title": "Logins by state",
+          "type": "timeseries",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 53,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (server, state) (mautrix_chatto_logins{job=~\"$job\",server=~\"$server\"})",
+              "legendFormat": "{{server}} {{state}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 21,
+          "title": "Logins without realtime",
+          "type": "timeseries",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 53,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "clamp_min(sum by (server) (mautrix_chatto_logins{job=~\"$job\",server=~\"$server\",state=\"CONNECTED\"}) - sum by (server) (mautrix_chatto_realtime_connected{job=~\"$job\",server=~\"$server\"}), 0)",
+              "legendFormat": "{{server}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 22,
+          "title": "Messages bridged",
+          "type": "timeseries",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 61,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (server, direction) (rate(mautrix_chatto_messages_bridged_total{job=~\"$job\",server=~\"$server\"}[$__rate_interval]))",
+              "legendFormat": "{{server}} {{direction}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 23,
+          "title": "Bridge errors",
+          "type": "timeseries",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 61,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (server, direction) (rate(mautrix_chatto_bridge_errors_total{job=~\"$job\",server=~\"$server\"}[$__rate_interval]))",
+              "legendFormat": "{{server}} {{direction}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 24,
+          "title": "Realtime event lag p95",
+          "type": "timeseries",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 69,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "histogram_quantile(0.95, sum by (le, server) (rate(mautrix_chatto_realtime_event_lag_seconds_bucket{job=~\"$job\",server=~\"$server\"}[$__rate_interval])))",
+              "legendFormat": "{{server}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 25,
+          "title": "RPC error ratio",
+          "type": "timeseries",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 69,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (server) (rate(mautrix_chatto_rpc_errors_total{job=~\"$job\",server=~\"$server\"}[$__rate_interval])) / sum by (server) (rate(mautrix_chatto_rpc_duration_seconds_count{job=~\"$job\",server=~\"$server\"}[$__rate_interval]))",
+              "legendFormat": "{{server}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        }
+      ]
     }
   ]
 }
