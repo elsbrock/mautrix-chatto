@@ -24,7 +24,6 @@ func TestIDsRoundTrip(t *testing.T) {
 	}{
 		{MakePortalID("home", "Rabc"), "home", PortalRoom, "Rabc"},
 		{MakeGroupPortalID("home", "Gabc"), "home", PortalGroup, "Gabc"},
-		{MakeServerPortalID("home"), "home", PortalServer, ""},
 		{"Rabc", "", PortalInvalid, ""},
 		{"home.", "", PortalInvalid, ""},
 		{".Rabc", "", PortalInvalid, ""},

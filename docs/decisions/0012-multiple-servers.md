@@ -38,4 +38,9 @@ has its own space. Renaming a server `id` orphans everything bridged under it.
 The server space depends on `bridge.personal_filtering_spaces` (on by
 default). Without it, group spaces, ungrouped channels and DMs are top-level.
 Group spaces are shared between the users of a server. Each user's DMs stay
-in their own personal space.
+in their own personal space. A group gets a space once the login is in one
+of its channels, so groups without such a channel stay hidden. Group spaces
+are refreshed on connect and on Chatto layout changes. bridgev2 does not
+re-parent cleanly in two cases: a channel that leaves all groups stays
+listed in its old group space, and an ungrouped channel that joins a group
+stays in the personal space as well. A deleted group leaves its space behind.

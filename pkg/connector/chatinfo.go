@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/rs/zerolog"
@@ -16,6 +17,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 
 	"github.com/elsbrock/mautrix-chatto/pkg/chattoid"
 	apiv1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
@@ -26,7 +28,6 @@ const (
 	portalKindDM      = "dm"
 	portalKindGroupDM = "group_dm"
 	portalKindSpace   = "space"
-	portalKindServer  = "server"
 
 	// maxMemberSync caps how many channel members are synced to Matrix.
 	maxMemberSync = 2000
@@ -38,8 +39,6 @@ func (c *ChattoClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal)
 		return nil, ErrServerMismatch
 	}
 	switch kind {
-	case chattoid.PortalServer:
-		return c.getServerInfo(ctx), nil
 	case chattoid.PortalGroup:
 		return c.getGroupInfo(ctx, chattoID)
 	case chattoid.PortalRoom:
@@ -91,7 +90,7 @@ func (c *ChattoClient) roomToChatInfo(ctx context.Context, rws *apiv1.RoomWithVi
 		for _, uid := range members {
 			info.Members.MemberMap.Set(c.makeMember(uid))
 		}
-		info.ParentID = ptr.Ptr(chattoid.MakeServerPortalID(c.serverID))
+		info.ParentID = ptr.Ptr(networkid.PortalID(""))
 		if len(members) <= 2 {
 			info.Type = ptr.Ptr(database.RoomTypeDM)
 			for _, uid := range members {
@@ -106,7 +105,7 @@ func (c *ChattoClient) roomToChatInfo(ctx context.Context, rws *apiv1.RoomWithVi
 		info.Type = ptr.Ptr(database.RoomTypeDefault)
 		info.Name = ptr.Ptr(room.GetName())
 		info.Topic = ptr.Ptr(channelTopic(room))
-		info.ParentID = ptr.Ptr(c.channelParent(room))
+		info.ParentID = ptr.Ptr(c.channelParent(ctx, room))
 		if withMembers {
 			members, full, err := c.listMembers(ctx, room.GetId())
 			if err != nil {
@@ -187,55 +186,137 @@ func (c *ChattoClient) listMembers(ctx context.Context, roomID string) ([]string
 	}
 }
 
-// channelParent returns the space a channel belongs to: its room group
-// with group_spaces, otherwise the server space.
-func (c *ChattoClient) channelParent(room *apiv1.Room) networkid.PortalID {
-	if c.Main.Config.GroupSpaces && room.GetGroupId() != "" {
-		return chattoid.MakeGroupPortalID(c.serverID, room.GetGroupId())
+// channelParent returns the space a channel belongs to: its room group, or
+// none for an ungrouped channel, which then sits in the personal space. The
+// empty parent is explicit so a channel moved out of a group is re-parented.
+func (c *ChattoClient) channelParent(ctx context.Context, room *apiv1.Room) networkid.PortalID {
+	if room.GetGroupId() == "" {
+		return ""
 	}
-	return chattoid.MakeServerPortalID(c.serverID)
+	c.ensureGroupSpace(ctx, room.GetGroupId(), nil)
+	return chattoid.MakeGroupPortalID(c.serverID, room.GetGroupId())
 }
 
-// getServerInfo builds the top-level space portal of this login's server
-// from its public profile. Without a profile the space is named after the
-// server ID; it is refreshed whenever a login of the server connects.
-func (c *ChattoClient) getServerInfo(ctx context.Context) *bridgev2.ChatInfo {
-	info := &bridgev2.ChatInfo{
-		Name: ptr.Ptr(c.serverID),
-		Type: ptr.Ptr(database.RoomTypeSpace),
-		Members: &bridgev2.ChatMemberList{
-			IsFull:    false,
-			MemberMap: bridgev2.ChatMemberMap{}.Set(c.makeMember(c.userID)),
-		},
-		ExtraUpdates: func(_ context.Context, portal *bridgev2.Portal) bool {
-			meta := portal.Metadata.(*chattoid.PortalMetadata)
-			if meta.Kind == portalKindServer {
-				return false
+// ensureGroupSpace creates a room group's space before any of its channels
+// and puts it in this login's personal space. With group set, an existing
+// space is refreshed from it.
+//
+// bridgev2 creates a missing parent space from the child room's event
+// context and abandons it when that context ends, which can leave the space
+// half-created; creating it up front avoids that path.
+func (c *ChattoClient) ensureGroupSpace(ctx context.Context, groupID string, group *apiv1.RoomGroup) {
+	portal, err := c.Main.Bridge.GetPortalByKey(ctx, networkid.PortalKey{ID: chattoid.MakeGroupPortalID(c.serverID, groupID)})
+	if err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).Str("group_id", groupID).Msg("Failed to get group space portal")
+		return
+	}
+	switch {
+	case portal.MXID != "" && group != nil:
+		portal.UpdateInfo(ctx, c.groupToChatInfo(group), c.UserLogin, nil, time.Time{})
+	case portal.MXID == "":
+		var info *bridgev2.ChatInfo
+		var err error
+		if group != nil {
+			info = c.groupToChatInfo(group)
+		} else {
+			info, err = c.getGroupInfo(ctx, groupID)
+		}
+		if err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).Str("group_id", groupID).Msg("Failed to get room group")
+			return
+		}
+		if err := portal.CreateMatrixRoom(ctx, c.UserLogin, info); err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).Str("group_id", groupID).Msg("Failed to create group space")
+			return
+		}
+	}
+	c.UserLogin.MarkInPortal(ctx, portal)
+}
+
+// ensureGroupSpaces refreshes the spaces of all room groups that contain a
+// room this login is a member of. Groups without such a room get no space.
+func (c *ChattoClient) ensureGroupSpaces(ctx context.Context) {
+	resp, err := c.api.RoomDirectory.ListRoomGroups(ctx, connect.NewRequest(&apiv1.ListRoomGroupsRequest{}))
+	if err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to list room groups")
+		return
+	}
+	for _, group := range resp.Msg.GetGroups() {
+		for _, item := range group.GetItems() {
+			if item.GetRoom().GetViewerState().GetIsMember() {
+				c.ensureGroupSpace(ctx, group.GetId(), group)
+				break
 			}
-			meta.Kind = portalKindServer
-			return true
-		},
+		}
+	}
+}
+
+// syncPersonalSpace makes the login's personal filtering space the server's
+// space: bridgev2 names it after the network and the login and gives it the
+// network icon, and a login belongs to exactly one server. Without a
+// profile the space is named after the server ID.
+func (c *ChattoClient) syncPersonalSpace(ctx context.Context) {
+	spaceRoom, err := c.UserLogin.GetSpaceRoom(ctx)
+	if err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get personal space")
+		return
+	} else if spaceRoom == "" {
+		return
 	}
 	profile, err := c.api.ServerProfile(ctx)
 	if err != nil {
 		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to fetch Chatto server profile")
-		return info
+		return
 	}
-	if profile.GetName() != "" {
-		info.Name = ptr.Ptr(profile.GetName())
+	name := profile.GetName()
+	if name == "" {
+		name = c.serverID
 	}
-	info.Topic = ptr.Ptr(profile.GetDescription())
-	if logo := c.api.ResolveURL(profile.GetLogoUrl()); logo != "" {
-		info.Avatar = &bridgev2.Avatar{
-			ID: networkid.AvatarID(logo),
-			Get: func(ctx context.Context) ([]byte, error) {
-				return c.downloadPublic(ctx, logo, 10<<20)
-			},
+	meta := c.UserLogin.Metadata.(*chattoid.UserLoginMetadata)
+	sendState := func(evtType event.Type, content any) bool {
+		_, err := c.Main.Bridge.Bot.SendState(ctx, spaceRoom, evtType, "", &event.Content{Parsed: content}, time.Time{})
+		if err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).Stringer("event_type", evtType).Msg("Failed to update personal space")
 		}
-	} else {
-		info.Avatar = &bridgev2.Avatar{Remove: true}
+		return err == nil
 	}
-	return info
+	changed := false
+	if meta.SpaceName != name && sendState(event.StateRoomName, &event.RoomNameEventContent{Name: name}) {
+		meta.SpaceName = name
+		changed = true
+	}
+	if topic := profile.GetDescription(); meta.SpaceTopic != topic && sendState(event.StateTopic, &event.TopicEventContent{Topic: topic}) {
+		meta.SpaceTopic = topic
+		changed = true
+	}
+	if logo := c.api.ResolveURL(profile.GetLogoUrl()); meta.SpaceLogo != logo {
+		var mxc id.ContentURIString
+		if logo != "" {
+			mxc, err = c.uploadPublic(ctx, spaceRoom, logo)
+		}
+		if err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to upload server logo")
+		} else if sendState(event.StateRoomAvatar, &event.RoomAvatarEventContent{URL: mxc}) {
+			meta.SpaceLogo = logo
+			changed = true
+		}
+	}
+	if !changed {
+		return
+	}
+	if err := c.UserLogin.Save(ctx); err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to save personal space state")
+	}
+}
+
+// uploadPublic copies a public Chatto image to the Matrix media repo.
+func (c *ChattoClient) uploadPublic(ctx context.Context, roomID id.RoomID, rawURL string) (id.ContentURIString, error) {
+	data, err := c.downloadPublic(ctx, rawURL, 10<<20)
+	if err != nil {
+		return "", err
+	}
+	mxc, _, err := c.Main.Bridge.Bot.UploadMedia(ctx, roomID, data, "", http.DetectContentType(data))
+	return mxc, err
 }
 
 // getGroupInfo builds the space portal of a Chatto room group.
@@ -244,12 +325,16 @@ func (c *ChattoClient) getGroupInfo(ctx context.Context, groupID string) (*bridg
 	if err != nil {
 		return nil, fmt.Errorf("failed to get room group: %w", err)
 	}
-	group := resp.Msg.GetGroup()
+	return c.groupToChatInfo(resp.Msg.GetGroup()), nil
+}
+
+// groupToChatInfo converts a room group. Groups have no parent, so bridgev2
+// puts them in the personal space of every login that is in them.
+func (c *ChattoClient) groupToChatInfo(group *apiv1.RoomGroup) *bridgev2.ChatInfo {
 	return &bridgev2.ChatInfo{
-		Name:     ptr.Ptr(group.GetName()),
-		Topic:    ptr.Ptr(group.GetDescription()),
-		Type:     ptr.Ptr(database.RoomTypeSpace),
-		ParentID: ptr.Ptr(chattoid.MakeServerPortalID(c.serverID)),
+		Name:  ptr.Ptr(group.GetName()),
+		Topic: ptr.Ptr(group.GetDescription()),
+		Type:  ptr.Ptr(database.RoomTypeSpace),
 		Members: &bridgev2.ChatMemberList{
 			IsFull:    false,
 			MemberMap: bridgev2.ChatMemberMap{}.Set(c.makeMember(c.userID)),
@@ -262,7 +347,7 @@ func (c *ChattoClient) getGroupInfo(ctx context.Context, groupID string) (*bridg
 			meta.Kind = portalKindSpace
 			return true
 		},
-	}, nil
+	}
 }
 
 func (c *ChattoClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {

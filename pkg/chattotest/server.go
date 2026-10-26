@@ -120,6 +120,8 @@ type Server struct {
 	MaxUploadSize int64
 	// Name is the server name in the public profile ("Fake Chatto" if empty).
 	Name string
+	// Description is the server description in the public profile.
+	Description string
 	// LogoKey, when set, gives the public profile a logo served under
 	// /assets/server/.
 	LogoKey string
@@ -741,6 +743,24 @@ func (s *Server) SetThreadingMode(roomID string, mode apiv1.RoomThreadingMode) {
 	s.mu.Unlock()
 	s.Publish(roomID, "", &realtimev1.RealtimeEvent{Event: &realtimev1.RealtimeEvent_RoomThreadingModeChanged{
 		RoomThreadingModeChanged: &realtimev1.RoomThreadingModeChangedEvent{RoomId: roomID, ThreadingMode: mode},
+	}})
+}
+
+// MoveRoom moves a channel into a group, or out of all groups with an empty
+// groupID, and publishes the layout change to its members.
+func (s *Server) MoveRoom(roomID, groupID string) {
+	s.mu.Lock()
+	r := s.rooms[roomID]
+	if g := s.groups[r.GroupID]; g != nil {
+		g.RoomIDs = slices.DeleteFunc(g.RoomIDs, func(id string) bool { return id == roomID })
+	}
+	r.GroupID = groupID
+	if g := s.groups[groupID]; g != nil {
+		g.RoomIDs = append(g.RoomIDs, roomID)
+	}
+	s.mu.Unlock()
+	s.Publish(roomID, "", &realtimev1.RealtimeEvent{Event: &realtimev1.RealtimeEvent_RoomLayoutChanged{
+		RoomLayoutChanged: &realtimev1.RoomLayoutChangedEvent{},
 	}})
 }
 

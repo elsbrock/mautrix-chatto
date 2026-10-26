@@ -87,7 +87,6 @@ let
   defaultConfig = {
     network = {
       servers = [ ];
-      group_spaces = false;
       displayname_template = "{{or .DisplayName .Login}}{{if .IsBot}} (bot){{end}}";
       sync_presence = true;
       keep_logins_online = false;

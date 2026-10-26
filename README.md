@@ -5,9 +5,10 @@ A Matrix ↔ [Chatto](https://chatto.run) puppeting bridge, built on
 
 It connects one or more Chatto servers (0.5 line, realtime protocol v4) to
 your Matrix homeserver:
-- Each Chatto server becomes a Matrix space.
-- Chatto channels, DMs and group DMs become Matrix rooms in that space.
-- Room groups can optionally become subspaces (`network.group_spaces`).
+- Each Chatto server becomes a Matrix space with the server's name and logo.
+- Room groups become subspaces, as in Chatto's sidebar.
+- Chatto channels, DMs and group DMs become Matrix rooms in their group, or
+  directly in the server space.
 - Messages, edits, deletions, reactions, replies, threads, attachments,
   typing, read state and presence flow both ways.
 
@@ -37,7 +38,7 @@ your Matrix homeserver:
 | Room name and topic | ✅ | ✅ | Channels only |
 | Room avatars | ➖ | ➖ | Chatto rooms have no avatars |
 | User avatars and names | ✅ | ➖ | |
-| Servers and room groups → spaces | ✅ | ➖ | One space per server; room groups as subspaces with `network.group_spaces` |
+| Servers and room groups → spaces | ✅ | ➖ | One space per server, room groups as subspaces |
 | Membership | ✅ | 🟡 | Leaving, adding (invite) and removing (kick) Chatto users in channels |
 | DMs | ✅ | ✅ | Start a DM with `start-chat @login` (human accounts only; Chatto forbids bot DMs) |
 | Group DMs | ✅ | ❌ | Chatto no longer lets anyone create new group DMs |
@@ -87,8 +88,9 @@ ghost's Matrix ID (`@chatto_<id>.<Chatto user ID>:example.com` with the default
 `0-9` and `-`. Changing it later orphans everything bridged under it; only
 `url` may change. See [ADR 0012](docs/decisions/0012-multiple-servers.md).
 
-`personal_filtering_spaces` (on by default) additionally gives each Matrix user
-a private space with all of their rooms across servers.
+Each server's space is the Matrix user's personal space for that login, so
+it needs `personal_filtering_spaces` (on by default). With it off, room
+groups, ungrouped channels and DMs show up as top-level rooms.
 
 Commands that act on Chatto (`accept-invite`, `grant-bot-permissions`) use the
 server of the room they're run in. Elsewhere, add `--server <id>` when you are

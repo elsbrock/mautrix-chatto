@@ -7,7 +7,6 @@ import (
 
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
-	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -19,67 +18,95 @@ import (
 // otherServer is the ID of the second fake server in multi-server tests.
 const otherServer = "other"
 
-func withGroupSpaces() harnessOpt {
-	return func(hc *harnessConfig) { hc.network.GroupSpaces = true }
+// withPersonalSpaces turns on personal filtering spaces, which are the
+// server spaces.
+func withPersonalSpaces() harnessOpt {
+	return func(hc *harnessConfig) { hc.bridge.PersonalFilteringSpaces = true }
 }
 
-// serverSpaceKey returns the portal key of a server's space.
-func serverSpaceKey(serverID string) networkid.PortalKey {
-	return networkid.PortalKey{ID: chattoid.MakeServerPortalID(serverID)}
+// spaceChild reports whether child is currently listed in the space room:
+// its latest m.space.child event has content.
+func (h *harness) spaceChild(space, child id.RoomID) bool {
+	evts := h.mx.Events(func(e *sentEvent) bool {
+		return e.Type == event.StateSpaceChild && e.RoomID == space && e.StateKey != nil && *e.StateKey == string(child)
+	})
+	if len(evts) == 0 {
+		return false
+	}
+	_ = evts[len(evts)-1].Content.ParseRaw(event.StateSpaceChild)
+	c, ok := evts[len(evts)-1].Content.Parsed.(*event.SpaceChildEventContent)
+	return ok && len(c.Via) > 0
 }
 
 // waitSpaceChild waits until child is listed in the space room.
 func (h *harness) waitSpaceChild(space, child id.RoomID) {
 	h.t.Helper()
-	h.eventually("space child "+string(child), func() bool {
-		return len(h.mx.Events(func(e *sentEvent) bool {
-			return e.Type == event.StateSpaceChild && e.RoomID == space && e.StateKey != nil && *e.StateKey == string(child)
-		})) > 0
-	})
+	h.eventually("space child "+string(child), func() bool { return h.spaceChild(space, child) })
 }
 
-func TestChannelsAndDMsSitInServerSpace(t *testing.T) {
-	h := newHarness(t)
-	h.srv.Name = "Acme Chat"
+// waitSpaceRoom waits until the login has a personal space.
+func (h *harness) waitSpaceRoom(ul *bridgev2.UserLogin) id.RoomID {
+	h.t.Helper()
+	h.eventually("personal space", func() bool { return ul.SpaceRoom != "" })
+	return ul.SpaceRoom
+}
+
+func TestServerLayoutMirrorsChatto(t *testing.T) {
+	h := newHarness(t, withPersonalSpaces())
 	alice := h.srv.AddUser("alice", "Alice", "pw")
 	bob := h.srv.AddUser("bob", "Bob", "pw")
 	group := h.srv.AddGroup("Engineering")
 	grouped := h.srv.AddChannel("backend", group.ID, alice.ID)
 	loose := h.srv.AddChannel("general", "", alice.ID)
 	dm := h.srv.AddDM(alice.ID, bob.ID)
-	h.login(aliceMXID, "alice", "pw")
+	// A group without any of alice's channels gets no space.
+	other := h.srv.AddGroup("Elsewhere")
+	h.srv.AddChannel("secret", other.ID, bob.ID)
+	space := h.waitSpaceRoom(h.login(aliceMXID, "alice", "pw"))
 
-	space := h.portalByID(serverSpaceKey(testServer))
-	h.eventually("server space metadata", func() bool {
-		p, _ := h.br.DB.Portal.GetByKey(h.ctx, serverSpaceKey(testServer))
-		return p.RoomType == database.RoomTypeSpace && p.Name == "Acme Chat"
-	})
-	for _, roomID := range []string{grouped.ID, loose.ID, dm.ID} {
-		h.waitSpaceChild(space.MXID, h.portal(roomID).MXID)
+	groupSpace := h.portalByID(chattoidGroupKey(group.ID))
+	if groupSpace.RoomType != database.RoomTypeSpace || groupSpace.Name != "Engineering" {
+		t.Fatalf("group space %q type %q", groupSpace.Name, groupSpace.RoomType)
 	}
-	// Without group_spaces, room groups get no portal at all.
-	if p, _ := h.br.DB.Portal.GetByKey(h.ctx, chattoidGroupKey(group.ID)); p != nil {
-		t.Fatalf("group portal %s exists without group_spaces", p.ID)
+	h.waitSpaceChild(space, groupSpace.MXID)
+	h.waitSpaceChild(groupSpace.MXID, h.portal(grouped.ID).MXID)
+	h.waitSpaceChild(space, h.portal(loose.ID).MXID)
+	h.waitSpaceChild(space, h.portal(dm.ID).MXID)
+	if h.spaceChild(space, h.portal(grouped.ID).MXID) {
+		t.Fatal("grouped channel also sits in the server space")
+	}
+	if p, _ := h.br.DB.Portal.GetByKey(h.ctx, chattoidGroupKey(other.ID)); p != nil && p.MXID != "" {
+		t.Fatalf("group %s without own channels got a space", other.ID)
 	}
 }
 
-func TestRoomGroupBecomesSubspace(t *testing.T) {
-	h := newHarness(t, withGroupSpaces())
+func TestGroupSpaceReachesEveryLoginsServerSpace(t *testing.T) {
+	h := newHarness(t, withPersonalSpaces())
+	alice := h.srv.AddUser("alice", "Alice", "pw")
+	carol := h.srv.AddUser("carol", "Carol", "pw")
+	group := h.srv.AddGroup("Engineering")
+	h.srv.AddChannel("backend", group.ID, alice.ID, carol.ID)
+	h.waitSpaceRoom(h.login(aliceMXID, "alice", "pw"))
+	groupSpace := h.portalByID(chattoidGroupKey(group.ID))
+
+	carolSpace := h.waitSpaceRoom(h.login(carolMXID, "carol", "pw"))
+	h.waitSpaceChild(carolSpace, groupSpace.MXID)
+}
+
+func TestMovedChannelChangesSpace(t *testing.T) {
+	h := newHarness(t, withPersonalSpaces())
 	alice := h.srv.AddUser("alice", "Alice", "pw")
 	group := h.srv.AddGroup("Engineering")
-	grouped := h.srv.AddChannel("backend", group.ID, alice.ID)
-	loose := h.srv.AddChannel("general", "", alice.ID)
-	h.login(aliceMXID, "alice", "pw")
+	room := h.srv.AddChannel("backend", "", alice.ID)
+	h.waitSpaceRoom(h.login(aliceMXID, "alice", "pw"))
+	portal := h.portal(room.ID)
 
-	server := h.portalByID(serverSpaceKey(testServer))
-	space := h.portalByID(chattoidGroupKey(group.ID))
-	h.eventually("group space metadata", func() bool {
-		p, _ := h.br.DB.Portal.GetByKey(h.ctx, chattoidGroupKey(group.ID))
-		return p.RoomType == database.RoomTypeSpace && p.Name == "Engineering"
-	})
-	h.waitSpaceChild(space.MXID, h.portal(grouped.ID).MXID)
-	h.waitSpaceChild(server.MXID, space.MXID)
-	h.waitSpaceChild(server.MXID, h.portal(loose.ID).MXID)
+	// Into a group that had no space yet. Moving out of all groups is not
+	// tested: bridgev2 keeps the old parent in memory and re-adds the
+	// channel to it.
+	h.srv.MoveRoom(room.ID, group.ID)
+	groupSpace := h.portalByID(chattoidGroupKey(group.ID))
+	h.waitSpaceChild(groupSpace.MXID, portal.MXID)
 }
 
 // twoServerWorld has alice logged into two servers whose fakes hand out the
@@ -286,29 +313,35 @@ func TestLoginOfUnconfiguredServerStaysLoggedOutable(t *testing.T) {
 	}
 }
 
-func TestPersonalSpaceGetsServerLogo(t *testing.T) {
-	h := newHarness(t, func(hc *harnessConfig) { hc.bridge.PersonalFilteringSpaces = true })
+func TestServerSpaceGetsServerProfile(t *testing.T) {
+	h := newHarness(t, withPersonalSpaces())
+	h.srv.Name = "Acme Chat"
+	h.srv.Description = "Where Acme talks"
 	h.srv.LogoKey = "logo1"
 	h.srv.AddUser("alice", "Alice", "pw")
 	ul := h.login(aliceMXID, "alice", "pw")
+	space := h.waitSpaceRoom(ul)
 
-	var logo id.ContentURIString
-	h.eventually("server space avatar", func() bool {
-		p, _ := h.br.DB.Portal.GetByKey(h.ctx, serverSpaceKey(testServer))
-		logo = p.AvatarMXC
-		return logo != ""
-	})
-	h.eventually("personal space avatar", func() bool {
+	stateIn := func(evtType event.Type, match func(any) bool) bool {
 		return len(h.mx.Events(func(e *sentEvent) bool {
-			if e.Type != event.StateRoomAvatar || e.RoomID != ul.SpaceRoom || ul.SpaceRoom == "" {
+			if e.Type != evtType || e.RoomID != space {
 				return false
 			}
 			_ = e.Content.ParseRaw(e.Type)
-			c, ok := e.Content.Parsed.(*event.RoomAvatarEventContent)
-			return ok && c.URL == logo
+			return match(e.Content.Parsed)
 		})) > 0
+	}
+	h.eventually("space name", func() bool {
+		return stateIn(event.StateRoomName, func(c any) bool { return c.(*event.RoomNameEventContent).Name == "Acme Chat" })
 	})
-	if got := ul.Metadata.(*chattoid.UserLoginMetadata).SpaceAvatar; got != string(logo) {
-		t.Fatalf("SpaceAvatar = %q, want %q", got, logo)
+	h.eventually("space topic", func() bool {
+		return stateIn(event.StateTopic, func(c any) bool { return c.(*event.TopicEventContent).Topic == "Where Acme talks" })
+	})
+	h.eventually("space avatar", func() bool {
+		return stateIn(event.StateRoomAvatar, func(c any) bool { return c.(*event.RoomAvatarEventContent).URL != "" })
+	})
+	meta := ul.Metadata.(*chattoid.UserLoginMetadata)
+	if meta.SpaceName != "Acme Chat" || meta.SpaceLogo == "" {
+		t.Fatalf("space state not saved: %+v", meta)
 	}
 }

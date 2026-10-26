@@ -27,9 +27,12 @@ type UserLoginMetadata struct {
 	// RealtimeCursor is the last safe realtime resume cursor. Cursors expire
 	// after 15 minutes, so it only helps across quick restarts.
 	RealtimeCursor string `json:"realtime_cursor,omitempty"`
-	// SpaceAvatar is the server logo last set on the personal filtering
-	// space.
-	SpaceAvatar string `json:"space_avatar,omitempty"`
+	// SpaceName, SpaceTopic and SpaceLogo are the server profile last set
+	// on the personal filtering space, which is the server's space.
+	// SpaceLogo is the logo's Chatto URL.
+	SpaceName  string `json:"space_name,omitempty"`
+	SpaceTopic string `json:"space_topic,omitempty"`
+	SpaceLogo  string `json:"space_logo,omitempty"`
 }
 
 // GhostMetadata is stored with each ghost.
@@ -40,7 +43,7 @@ type GhostMetadata struct {
 
 // PortalMetadata is stored with each portal.
 type PortalMetadata struct {
-	Kind          string `json:"kind,omitempty"` // channel, dm, group_dm, space, server
+	Kind          string `json:"kind,omitempty"` // channel, dm, group_dm, space
 	ThreadingMode int32  `json:"threading_mode,omitempty"`
 	Universal     bool   `json:"universal,omitempty"`
 	Archived      bool   `json:"archived,omitempty"`

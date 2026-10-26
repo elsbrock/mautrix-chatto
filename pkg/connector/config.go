@@ -19,7 +19,6 @@ var ExampleConfig string
 // Config is the network section of the bridge config.
 type Config struct {
 	Servers             []ServerConfig `yaml:"servers"`
-	GroupSpaces         bool           `yaml:"group_spaces"`
 	DisplaynameTemplate string         `yaml:"displayname_template"`
 	SyncPresence        bool           `yaml:"sync_presence"`
 	KeepLoginsOnline    bool           `yaml:"keep_logins_online"`
@@ -170,7 +169,6 @@ func truncateRunes(s string, n int) string {
 
 func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.List, "servers")
-	helper.Copy(up.Bool, "group_spaces")
 	helper.Copy(up.Str, "displayname_template")
 	helper.Copy(up.Bool, "sync_presence")
 	helper.Copy(up.Bool, "keep_logins_online")

@@ -4,8 +4,8 @@
 // events, U… users). One bridge serves several servers, so every network ID
 // is the configured server ID, a dot, and the Chatto ID. The dot keeps ghost
 // MXID localparts readable, and neither server IDs nor Chatto IDs contain
-// one. Room groups and the server itself share the portal ID namespace with
-// rooms and are marked to keep them apart.
+// one. Room groups share the portal ID namespace with rooms and are marked
+// to keep them apart.
 package chattoid
 
 import (
@@ -17,7 +17,6 @@ import (
 const (
 	sep          = "."
 	groupPrefix  = "group:"
-	serverPortal = "server"
 	noticePrefix = "notice:"
 	// AttachmentPartPrefix prefixes message part IDs of attachments.
 	AttachmentPartPrefix = "att:"
@@ -31,7 +30,6 @@ const (
 	PortalInvalid PortalKind = iota
 	PortalRoom
 	PortalGroup
-	PortalServer
 )
 
 func join(server, id string) string {
@@ -85,20 +83,11 @@ func MakeGroupPortalID(server, groupID string) networkid.PortalID {
 	return networkid.PortalID(join(server, groupPrefix+groupID))
 }
 
-// MakeServerPortalID returns the portal (space) ID of a Chatto server.
-func MakeServerPortalID(server string) networkid.PortalID {
-	return networkid.PortalID(join(server, serverPortal))
-}
-
-// ParsePortalID returns the server, kind and Chatto ID of a portal. The ID
-// is empty for a server space.
+// ParsePortalID returns the server, kind and Chatto ID of a portal.
 func ParsePortalID(id networkid.PortalID) (server string, kind PortalKind, chattoID string) {
 	server, rest := split(string(id))
-	switch {
-	case server == "":
+	if server == "" {
 		return "", PortalInvalid, ""
-	case rest == serverPortal:
-		return server, PortalServer, ""
 	}
 	if g, ok := strings.CutPrefix(rest, groupPrefix); ok {
 		if g == "" {

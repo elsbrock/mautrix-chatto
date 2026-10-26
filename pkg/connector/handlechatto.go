@@ -332,6 +332,7 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 	case *realtimev1.RealtimeEvent_MessageUnpinned:
 		c.syncPins(ctx, e.MessageUnpinned.GetRoomId())
 	case *realtimev1.RealtimeEvent_RoomLayoutChanged:
+		c.ensureGroupSpaces(ctx)
 		c.syncAllRooms(ctx)
 	case *realtimev1.RealtimeEvent_RoomInvitationCreated:
 		c.handleInvitation(ctx, e.RoomInvitationCreated.GetRoomId(), e.RoomInvitationCreated.GetInvitationId())

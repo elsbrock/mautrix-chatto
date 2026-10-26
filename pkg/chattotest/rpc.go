@@ -207,6 +207,10 @@ func (d *discoveryService) GetServer(context.Context, *connect.Request[discovery
 		name = "Fake Chatto"
 	}
 	profile := &apiv1.ServerPublicProfile{Version: Version, Name: name}
+	if d.s.Description != "" {
+		desc := d.s.Description
+		profile.Description = &desc
+	}
 	if d.s.LogoKey != "" {
 		logo := d.s.HTTP.URL + "/assets/server/" + d.s.LogoKey
 		profile.LogoUrl = &logo

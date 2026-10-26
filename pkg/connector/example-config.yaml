@@ -7,11 +7,6 @@ servers:
     - id: main
       url: https://chat.example.com
 
-# Should Chatto room groups become subspaces of the server space? When false,
-# all channels sit directly in the server space. Turning this off later
-# leaves the existing group spaces behind.
-group_spaces: false
-
 # Displayname template for Chatto users.
 # {{.DisplayName}} - the display name set on Chatto (may be empty)
 # {{.Login}}       - the Chatto username
