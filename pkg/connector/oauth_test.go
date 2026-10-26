@@ -12,8 +12,8 @@ import (
 
 	"maunium.net/go/mautrix/bridgev2"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattotest"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoid"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattotest"
 )
 
 func TestOAuthLogin(t *testing.T) {

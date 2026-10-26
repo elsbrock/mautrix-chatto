@@ -8,7 +8,7 @@ package adminv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
-	v1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
+	v1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	fieldmaskpb "google.golang.org/protobuf/types/known/fieldmaskpb"
@@ -608,8 +608,8 @@ const file_chatto_admin_v1_oauth_clients_proto_rawDesc = "" +
 	"\x17AdminOAuthClientService\x12g\n" +
 	"\x10ListOAuthClients\x12(.chatto.admin.v1.ListOAuthClientsRequest\x1a).chatto.admin.v1.ListOAuthClientsResponse\x12a\n" +
 	"\x0eGetOAuthClient\x12&.chatto.admin.v1.GetOAuthClientRequest\x1a'.chatto.admin.v1.GetOAuthClientResponse\x12|\n" +
-	"\x17UpdateOAuthClientPolicy\x12/.chatto.admin.v1.UpdateOAuthClientPolicyRequest\x1a0.chatto.admin.v1.UpdateOAuthClientPolicyResponseB\xd5\x01\n" +
-	"\x13com.chatto.admin.v1B\x11OauthClientsProtoP\x01ZMgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/admin/v1;adminv1\xa2\x02\x03CAX\xaa\x02\x0fChatto.Admin.V1\xca\x02\x0fChatto\\Admin\\V1\xe2\x02\x1bChatto\\Admin\\V1\\GPBMetadata\xea\x02\x11Chatto::Admin::V1b\x06proto3"
+	"\x17UpdateOAuthClientPolicy\x12/.chatto.admin.v1.UpdateOAuthClientPolicyRequest\x1a0.chatto.admin.v1.UpdateOAuthClientPolicyResponseB\xcf\x01\n" +
+	"\x13com.chatto.admin.v1B\x11OauthClientsProtoP\x01ZGgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/admin/v1;adminv1\xa2\x02\x03CAX\xaa\x02\x0fChatto.Admin.V1\xca\x02\x0fChatto\\Admin\\V1\xe2\x02\x1bChatto\\Admin\\V1\\GPBMetadata\xea\x02\x11Chatto::Admin::V1b\x06proto3"
 
 var (
 	file_chatto_admin_v1_oauth_clients_proto_rawDescOnce sync.Once

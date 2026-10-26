@@ -11,9 +11,9 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
-	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/emoji"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoid"
+	apiv1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
+	"github.com/elsbrock/mautrix-chatto/pkg/emoji"
 )
 
 // maxForwardPages bounds forward fill after a long outage.

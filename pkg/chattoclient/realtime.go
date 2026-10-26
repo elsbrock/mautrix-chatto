@@ -14,8 +14,8 @@ import (
 	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/bridgemetrics"
-	realtimev1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/realtime/v1"
+	"github.com/elsbrock/mautrix-chatto/pkg/bridgemetrics"
+	realtimev1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/realtime/v1"
 )
 
 // RealtimeProtocolVersion is the realtime behavioural protocol version this

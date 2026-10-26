@@ -14,9 +14,9 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/status"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/bridgemetrics"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
+	"github.com/elsbrock/mautrix-chatto/pkg/bridgemetrics"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoclient"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoid"
 )
 
 // Connector is the bridgev2 NetworkConnector for the configured Chatto servers.
@@ -85,7 +85,7 @@ func (c *Connector) GetName() bridgev2.BridgeName {
 		NetworkURL:       "https://chatto.run",
 		NetworkIcon:      "",
 		NetworkID:        "chatto",
-		BeeperBridgeType: "github.com/elsbrock/matrix-chatto-bridge",
+		BeeperBridgeType: "github.com/elsbrock/mautrix-chatto",
 		DefaultPort:      29340,
 	}
 }

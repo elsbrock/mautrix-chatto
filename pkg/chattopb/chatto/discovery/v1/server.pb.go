@@ -7,7 +7,7 @@
 package discoveryv1
 
 import (
-	v1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
+	v1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -405,8 +405,8 @@ const file_chatto_discovery_v1_server_proto_rawDesc = "" +
 	"\x16ServerDiscoveryService\x12_\n" +
 	"\tGetServer\x12%.chatto.discovery.v1.GetServerRequest\x1a&.chatto.discovery.v1.GetServerResponse\"\x03\x90\x02\x01\x12k\n" +
 	"\rListNeighbors\x12).chatto.discovery.v1.ListNeighborsRequest\x1a*.chatto.discovery.v1.ListNeighborsResponse\"\x03\x90\x02\x01\x12\x89\x01\n" +
-	"\x17ListNeighborhoodServers\x123.chatto.discovery.v1.ListNeighborhoodServersRequest\x1a4.chatto.discovery.v1.ListNeighborhoodServersResponse\"\x03\x90\x02\x01B\xeb\x01\n" +
-	"\x17com.chatto.discovery.v1B\vServerProtoP\x01ZUgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/discovery/v1;discoveryv1\xa2\x02\x03CDX\xaa\x02\x13Chatto.Discovery.V1\xca\x02\x13Chatto\\Discovery\\V1\xe2\x02\x1fChatto\\Discovery\\V1\\GPBMetadata\xea\x02\x15Chatto::Discovery::V1b\x06proto3"
+	"\x17ListNeighborhoodServers\x123.chatto.discovery.v1.ListNeighborhoodServersRequest\x1a4.chatto.discovery.v1.ListNeighborhoodServersResponse\"\x03\x90\x02\x01B\xe5\x01\n" +
+	"\x17com.chatto.discovery.v1B\vServerProtoP\x01ZOgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/discovery/v1;discoveryv1\xa2\x02\x03CDX\xaa\x02\x13Chatto.Discovery.V1\xca\x02\x13Chatto\\Discovery\\V1\xe2\x02\x1fChatto\\Discovery\\V1\\GPBMetadata\xea\x02\x15Chatto::Discovery::V1b\x06proto3"
 
 var (
 	file_chatto_discovery_v1_server_proto_rawDescOnce sync.Once

@@ -24,8 +24,8 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattotest"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoid"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattotest"
 )
 
 // testServer is the ID of the harness's primary fake Chatto server.

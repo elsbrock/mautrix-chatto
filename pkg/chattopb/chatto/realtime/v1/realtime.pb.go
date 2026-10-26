@@ -7,7 +7,7 @@
 package realtimev1
 
 import (
-	v1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
+	v1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	durationpb "google.golang.org/protobuf/types/known/durationpb"
@@ -1722,8 +1722,8 @@ const file_chatto_realtime_v1_realtime_proto_rawDesc = "" +
 	",REALTIME_CLOSE_CODE_SESSION_RENEWAL_REQUIRED\x10\x05\x12'\n" +
 	"#REALTIME_CLOSE_CODE_RESYNC_REQUIRED\x10\x06\x12*\n" +
 	"&REALTIME_CLOSE_CODE_SESSION_TERMINATED\x10\a\x12/\n" +
-	"+REALTIME_CLOSE_CODE_PRIVILEGED_MODE_EXPIRED\x10\bB\xe6\x01\n" +
-	"\x16com.chatto.realtime.v1B\rRealtimeProtoP\x01ZSgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/realtime/v1;realtimev1\xa2\x02\x03CRX\xaa\x02\x12Chatto.Realtime.V1\xca\x02\x12Chatto\\Realtime\\V1\xe2\x02\x1eChatto\\Realtime\\V1\\GPBMetadata\xea\x02\x14Chatto::Realtime::V1b\x06proto3"
+	"+REALTIME_CLOSE_CODE_PRIVILEGED_MODE_EXPIRED\x10\bB\xe0\x01\n" +
+	"\x16com.chatto.realtime.v1B\rRealtimeProtoP\x01ZMgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/realtime/v1;realtimev1\xa2\x02\x03CRX\xaa\x02\x12Chatto.Realtime.V1\xca\x02\x12Chatto\\Realtime\\V1\xe2\x02\x1eChatto\\Realtime\\V1\\GPBMetadata\xea\x02\x14Chatto::Realtime::V1b\x06proto3"
 
 var (
 	file_chatto_realtime_v1_realtime_proto_rawDescOnce sync.Once

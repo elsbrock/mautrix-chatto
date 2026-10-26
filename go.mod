@@ -1,4 +1,4 @@
-module github.com/elsbrock/matrix-chatto-bridge
+module github.com/elsbrock/mautrix-chatto
 
 go 1.26.0
 

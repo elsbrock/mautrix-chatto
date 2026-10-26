@@ -19,10 +19,10 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/id"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
-	adminv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/admin/v1"
-	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoclient"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoid"
+	adminv1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/admin/v1"
+	apiv1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
 )
 
 // ghostBot is a Chatto bot account that stands in for one Matrix user who has

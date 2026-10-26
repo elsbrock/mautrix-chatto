@@ -388,8 +388,8 @@ const file_chatto_operator_v1_messages_proto_rawDesc = "" +
 	"\x05added\x18\x01 \x01(\bR\x05added2\xe7\x01\n" +
 	"\x16OperatorMessageService\x12d\n" +
 	"\rImportMessage\x12(.chatto.operator.v1.ImportMessageRequest\x1a).chatto.operator.v1.ImportMessageResponse\x12g\n" +
-	"\x0eImportReaction\x12).chatto.operator.v1.ImportReactionRequest\x1a*.chatto.operator.v1.ImportReactionResponseB\xe6\x01\n" +
-	"\x16com.chatto.operator.v1B\rMessagesProtoP\x01ZSgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/operator/v1;operatorv1\xa2\x02\x03COX\xaa\x02\x12Chatto.Operator.V1\xca\x02\x12Chatto\\Operator\\V1\xe2\x02\x1eChatto\\Operator\\V1\\GPBMetadata\xea\x02\x14Chatto::Operator::V1b\x06proto3"
+	"\x0eImportReaction\x12).chatto.operator.v1.ImportReactionRequest\x1a*.chatto.operator.v1.ImportReactionResponseB\xe0\x01\n" +
+	"\x16com.chatto.operator.v1B\rMessagesProtoP\x01ZMgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/operator/v1;operatorv1\xa2\x02\x03COX\xaa\x02\x12Chatto.Operator.V1\xca\x02\x12Chatto\\Operator\\V1\xe2\x02\x1eChatto\\Operator\\V1\\GPBMetadata\xea\x02\x14Chatto::Operator::V1b\x06proto3"
 
 var (
 	file_chatto_operator_v1_messages_proto_rawDescOnce sync.Once

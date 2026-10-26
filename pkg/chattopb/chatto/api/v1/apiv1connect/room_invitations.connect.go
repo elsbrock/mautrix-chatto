@@ -8,7 +8,7 @@ import (
 	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
-	v1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
+	v1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
 	http "net/http"
 	strings "strings"
 )

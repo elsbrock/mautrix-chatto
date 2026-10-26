@@ -408,9 +408,9 @@ const file_chatto_api_v1_roles_proto_rawDesc = "" +
 	"\vRoleService\x12N\n" +
 	"\tListRoles\x12\x1f.chatto.api.v1.ListRolesRequest\x1a .chatto.api.v1.ListRolesResponse\x12H\n" +
 	"\aGetRole\x12\x1d.chatto.api.v1.GetRoleRequest\x1a\x1e.chatto.api.v1.GetRoleResponse\x12Z\n" +
-	"\rBatchGetRoles\x12#.chatto.api.v1.BatchGetRolesRequest\x1a$.chatto.api.v1.BatchGetRolesResponseB\xc0\x01\n" +
+	"\rBatchGetRoles\x12#.chatto.api.v1.BatchGetRolesRequest\x1a$.chatto.api.v1.BatchGetRolesResponseB\xba\x01\n" +
 	"\x11com.chatto.api.v1B\n" +
-	"RolesProtoP\x01ZIgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
+	"RolesProtoP\x01ZCgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
 
 var (
 	file_chatto_api_v1_roles_proto_rawDescOnce sync.Once

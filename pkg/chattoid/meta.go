@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoclient"
 )
 
 // CredentialKind says how a login authenticates.

@@ -1035,8 +1035,8 @@ const file_chatto_api_v1_voice_calls_proto_rawDesc = "" +
 	"\bJoinCall\x12\x1e.chatto.api.v1.JoinCallRequest\x1a\x1f.chatto.api.v1.JoinCallResponse\x12`\n" +
 	"\x0fCreateCallToken\x12%.chatto.api.v1.CreateCallTokenRequest\x1a&.chatto.api.v1.CreateCallTokenResponse\x12\x8a\x01\n" +
 	"\x1dCreateCallMediaPublisherToken\x123.chatto.api.v1.CreateCallMediaPublisherTokenRequest\x1a4.chatto.api.v1.CreateCallMediaPublisherTokenResponse\x12N\n" +
-	"\tLeaveCall\x12\x1f.chatto.api.v1.LeaveCallRequest\x1a .chatto.api.v1.LeaveCallResponseB\xc5\x01\n" +
-	"\x11com.chatto.api.v1B\x0fVoiceCallsProtoP\x01ZIgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
+	"\tLeaveCall\x12\x1f.chatto.api.v1.LeaveCallRequest\x1a .chatto.api.v1.LeaveCallResponseB\xbf\x01\n" +
+	"\x11com.chatto.api.v1B\x0fVoiceCallsProtoP\x01ZCgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
 
 var (
 	file_chatto_api_v1_voice_calls_proto_rawDescOnce sync.Once

@@ -13,7 +13,7 @@ your Matrix homeserver:
 
 > **Status:** feature-complete against Chatto `v0.5.0-beta.21`. It is tested
 > against an in-memory fake of Chatto's API and a mock homeserver, but has not
-> been run against a real Chatto server yet. See [MORNING.md](MORNING.md).
+> been run against a real Chatto server yet.
 
 ## Features
 
@@ -124,7 +124,7 @@ It grants `room.list`, `room.join`, `message.read`, `message.post`,
 
 ```nix
 {
-  inputs.mautrix-chatto.url = "github:elsbrock/matrix-chatto-bridge";
+  inputs.mautrix-chatto.url = "github:elsbrock/mautrix-chatto";
 
   outputs = { nixpkgs, mautrix-chatto, ... }: {
     nixosConfigurations.homelab = nixpkgs.lib.nixosSystem {
@@ -165,7 +165,7 @@ It grants `room.list`, `room.join`, `message.read`, `message.post`,
 ## Quickstart: any Linux host
 
 ```sh
-nix build github:elsbrock/matrix-chatto-bridge   # or: go build -tags goolm ./cmd/mautrix-chatto
+nix build github:elsbrock/mautrix-chatto   # or: go build -tags goolm ./cmd/mautrix-chatto
 ./result/bin/mautrix-chatto -e -c config.yaml    # writes the example config
 $EDITOR config.yaml                              # network.servers, homeserver.*, bridge.permissions
 ./result/bin/mautrix-chatto -g -c config.yaml -r registration.yaml
@@ -184,7 +184,7 @@ The Chatto-specific part is the `network:` section.
 ## Container image
 
 ```sh
-nix build github:elsbrock/matrix-chatto-bridge#docker && docker load < result
+nix build github:elsbrock/mautrix-chatto#docker && docker load < result
 docker run --rm -v $PWD/data:/data mautrix-chatto -e -c /data/config.yaml   # write a config
 # edit data/config.yaml: set appservice.hostname to 0.0.0.0, then
 docker run --rm -v $PWD/data:/data mautrix-chatto -g -c /data/config.yaml -r /data/registration.yaml

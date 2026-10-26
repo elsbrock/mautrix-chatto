@@ -9,7 +9,7 @@ import (
 	"connectrpc.com/connect"
 	"maunium.net/go/mautrix/bridgev2"
 
-	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
+	apiv1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
 )
 
 var ErrBotsCannotStartDMs = bridgev2.RespError{

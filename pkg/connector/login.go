@@ -12,9 +12,9 @@ import (
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/status"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
-	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoclient"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoid"
+	apiv1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
 )
 
 const (

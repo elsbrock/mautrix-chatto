@@ -275,8 +275,8 @@ const file_chatto_api_v1_server_proto_rawDesc = "" +
 	"\x15AccountCreationPolicy\x12'\n" +
 	"#ACCOUNT_CREATION_POLICY_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cACCOUNT_CREATION_POLICY_OPEN\x10\x01\x12'\n" +
-	"#ACCOUNT_CREATION_POLICY_INVITE_ONLY\x10\x02B\xc1\x01\n" +
-	"\x11com.chatto.api.v1B\vServerProtoP\x01ZIgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
+	"#ACCOUNT_CREATION_POLICY_INVITE_ONLY\x10\x02B\xbb\x01\n" +
+	"\x11com.chatto.api.v1B\vServerProtoP\x01ZCgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
 
 var (
 	file_chatto_api_v1_server_proto_rawDescOnce sync.Once

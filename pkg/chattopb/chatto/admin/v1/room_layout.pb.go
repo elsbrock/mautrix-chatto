@@ -8,7 +8,7 @@ package adminv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
-	v1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
+	v1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	fieldmaskpb "google.golang.org/protobuf/types/known/fieldmaskpb"
@@ -1932,8 +1932,8 @@ const file_chatto_admin_v1_room_layout_proto_rawDesc = "" +
 	"\x11CreateSidebarLink\x12).chatto.admin.v1.CreateSidebarLinkRequest\x1a*.chatto.admin.v1.CreateSidebarLinkResponse\x12j\n" +
 	"\x11UpdateSidebarLink\x12).chatto.admin.v1.UpdateSidebarLinkRequest\x1a*.chatto.admin.v1.UpdateSidebarLinkResponse\x12j\n" +
 	"\x11DeleteSidebarLink\x12).chatto.admin.v1.DeleteSidebarLinkRequest\x1a*.chatto.admin.v1.DeleteSidebarLinkResponse\x12y\n" +
-	"\x16MoveSidebarLinkToGroup\x12..chatto.admin.v1.MoveSidebarLinkToGroupRequest\x1a/.chatto.admin.v1.MoveSidebarLinkToGroupResponseB\xd3\x01\n" +
-	"\x13com.chatto.admin.v1B\x0fRoomLayoutProtoP\x01ZMgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/admin/v1;adminv1\xa2\x02\x03CAX\xaa\x02\x0fChatto.Admin.V1\xca\x02\x0fChatto\\Admin\\V1\xe2\x02\x1bChatto\\Admin\\V1\\GPBMetadata\xea\x02\x11Chatto::Admin::V1b\x06proto3"
+	"\x16MoveSidebarLinkToGroup\x12..chatto.admin.v1.MoveSidebarLinkToGroupRequest\x1a/.chatto.admin.v1.MoveSidebarLinkToGroupResponseB\xcd\x01\n" +
+	"\x13com.chatto.admin.v1B\x0fRoomLayoutProtoP\x01ZGgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/admin/v1;adminv1\xa2\x02\x03CAX\xaa\x02\x0fChatto.Admin.V1\xca\x02\x0fChatto\\Admin\\V1\xe2\x02\x1bChatto\\Admin\\V1\\GPBMetadata\xea\x02\x11Chatto::Admin::V1b\x06proto3"
 
 var (
 	file_chatto_admin_v1_room_layout_proto_rawDescOnce sync.Once

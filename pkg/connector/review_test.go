@@ -7,9 +7,9 @@ import (
 	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/event"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
-	realtimev1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/realtime/v1"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattotest"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoid"
+	realtimev1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/realtime/v1"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattotest"
 )
 
 // Regression tests for issues found in review.

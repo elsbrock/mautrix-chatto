@@ -2649,8 +2649,8 @@ const file_chatto_api_v1_notifications_proto_rawDesc = "" +
 	"\x19NotificationPolicyService\x12\xa4\x01\n" +
 	"\x15GetNotificationPolicy\x12D.chatto.api.v1.NotificationPolicyServiceGetNotificationPolicyRequest\x1aE.chatto.api.v1.NotificationPolicyServiceGetNotificationPolicyResponse\x12\x87\x01\n" +
 	"\x1cBatchGetNotificationPolicies\x122.chatto.api.v1.BatchGetNotificationPoliciesRequest\x1a3.chatto.api.v1.BatchGetNotificationPoliciesResponse\x12\xb2\x01\n" +
-	"\x18UpdateNotificationPolicy\x12G.chatto.api.v1.NotificationPolicyServiceUpdateNotificationPolicyRequest\x1aH.chatto.api.v1.NotificationPolicyServiceUpdateNotificationPolicyResponse\"\x03\x90\x02\x02B\xc8\x01\n" +
-	"\x11com.chatto.api.v1B\x12NotificationsProtoP\x01ZIgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
+	"\x18UpdateNotificationPolicy\x12G.chatto.api.v1.NotificationPolicyServiceUpdateNotificationPolicyRequest\x1aH.chatto.api.v1.NotificationPolicyServiceUpdateNotificationPolicyResponse\"\x03\x90\x02\x02B\xc2\x01\n" +
+	"\x11com.chatto.api.v1B\x12NotificationsProtoP\x01ZCgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
 
 var (
 	file_chatto_api_v1_notifications_proto_rawDescOnce sync.Once

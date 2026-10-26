@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/bridgemetrics"
+	"github.com/elsbrock/mautrix-chatto/pkg/bridgemetrics"
 )
 
 // TokenSource supplies the bearer credential for requests.

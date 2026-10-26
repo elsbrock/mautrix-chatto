@@ -8,7 +8,7 @@ package adminv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
-	v1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
+	v1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -2165,8 +2165,8 @@ const file_chatto_admin_v1_permissions_proto_rawDesc = "" +
 	"\x1bListUserPermissionDecisions\x123.chatto.admin.v1.ListUserPermissionDecisionsRequest\x1a4.chatto.admin.v1.ListUserPermissionDecisionsResponse\x12m\n" +
 	"\x12ExplainPermissions\x12*.chatto.admin.v1.ExplainPermissionsRequest\x1a+.chatto.admin.v1.ExplainPermissionsResponse\x12j\n" +
 	"\x11SetRolePermission\x12).chatto.admin.v1.SetRolePermissionRequest\x1a*.chatto.admin.v1.SetRolePermissionResponse\x12j\n" +
-	"\x11SetUserPermission\x12).chatto.admin.v1.SetUserPermissionRequest\x1a*.chatto.admin.v1.SetUserPermissionResponseB\xd4\x01\n" +
-	"\x13com.chatto.admin.v1B\x10PermissionsProtoP\x01ZMgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/admin/v1;adminv1\xa2\x02\x03CAX\xaa\x02\x0fChatto.Admin.V1\xca\x02\x0fChatto\\Admin\\V1\xe2\x02\x1bChatto\\Admin\\V1\\GPBMetadata\xea\x02\x11Chatto::Admin::V1b\x06proto3"
+	"\x11SetUserPermission\x12).chatto.admin.v1.SetUserPermissionRequest\x1a*.chatto.admin.v1.SetUserPermissionResponseB\xce\x01\n" +
+	"\x13com.chatto.admin.v1B\x10PermissionsProtoP\x01ZGgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/admin/v1;adminv1\xa2\x02\x03CAX\xaa\x02\x0fChatto.Admin.V1\xca\x02\x0fChatto\\Admin\\V1\xe2\x02\x1bChatto\\Admin\\V1\\GPBMetadata\xea\x02\x11Chatto::Admin::V1b\x06proto3"
 
 var (
 	file_chatto_admin_v1_permissions_proto_rawDescOnce sync.Once

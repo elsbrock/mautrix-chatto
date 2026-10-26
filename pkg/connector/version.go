@@ -5,7 +5,7 @@ import (
 
 	"golang.org/x/mod/semver"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoclient"
 )
 
 // CheckServerVersion reports whether a Chatto server version is at least the

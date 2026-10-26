@@ -9,9 +9,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
-	realtimev1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/realtime/v1"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattotest"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoclient"
+	realtimev1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/realtime/v1"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattotest"
 )
 
 // recorder is a RealtimeHandler that records everything it gets.

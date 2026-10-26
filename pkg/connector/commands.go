@@ -9,10 +9,10 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/commands"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
-	adminv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/admin/v1"
-	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoclient"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoid"
+	adminv1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/admin/v1"
+	apiv1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
 )
 
 // BotPermissions are the Chatto permissions a bot login needs to bridge a

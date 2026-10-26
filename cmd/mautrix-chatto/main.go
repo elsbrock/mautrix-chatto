@@ -1,5 +1,5 @@
 // mautrix-chatto - A Matrix-Chatto puppeting bridge.
-// Copyright (C) 2026 The matrix-chatto-bridge authors
+// Copyright (C) 2026 The mautrix-chatto authors
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published by
@@ -19,9 +19,9 @@ package main
 import (
 	"maunium.net/go/mautrix/bridgev2/matrix/mxmain"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/bridgemetrics"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/connector"
+	"github.com/elsbrock/mautrix-chatto/pkg/bridgemetrics"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoclient"
+	"github.com/elsbrock/mautrix-chatto/pkg/connector"
 )
 
 // Filled at build time with -X linker flags.
@@ -35,7 +35,7 @@ func main() {
 	c := &connector.Connector{}
 	m := mxmain.BridgeMain{
 		Name:        "mautrix-chatto",
-		URL:         "https://github.com/elsbrock/matrix-chatto-bridge",
+		URL:         "https://github.com/elsbrock/mautrix-chatto",
 		Description: "A Matrix-Chatto puppeting bridge.",
 		Version:     "0.1.0",
 		Connector:   c,

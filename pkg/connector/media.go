@@ -16,8 +16,8 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/event"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
-	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoclient"
+	apiv1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
 )
 
 // defaultChunkSize is used when the server does not announce max_chunk_size.

@@ -29,7 +29,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/elsbrock/matrix-chatto-bridge
+        - github.com/elsbrock/mautrix-chatto
   exclusions:
     paths:
       - pkg/chattopb

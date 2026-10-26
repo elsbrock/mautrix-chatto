@@ -9,9 +9,9 @@ import (
 
 	"connectrpc.com/connect"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
-	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattotest"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoclient"
+	apiv1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattotest"
 )
 
 func TestParseServerURL(t *testing.T) {

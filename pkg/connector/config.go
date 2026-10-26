@@ -10,7 +10,7 @@ import (
 	up "go.mau.fi/util/configupgrade"
 	"gopkg.in/yaml.v3"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoclient"
 )
 
 //go:embed example-config.yaml

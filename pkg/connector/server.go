@@ -8,8 +8,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/bridgemetrics"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
+	"github.com/elsbrock/mautrix-chatto/pkg/bridgemetrics"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoclient"
 )
 
 // server is the runtime state of one configured Chatto server.

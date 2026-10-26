@@ -606,8 +606,8 @@ const file_chatto_admin_v1_event_log_proto_rawDesc = "" +
 	"\n" +
 	"ListEvents\x12\".chatto.admin.v1.ListEventsRequest\x1a#.chatto.admin.v1.ListEventsResponse\x12a\n" +
 	"\x0eListEventTypes\x12&.chatto.admin.v1.ListEventTypesRequest\x1a'.chatto.admin.v1.ListEventTypesResponse\x12O\n" +
-	"\bGetEvent\x12 .chatto.admin.v1.GetEventRequest\x1a!.chatto.admin.v1.GetEventResponseB\xd1\x01\n" +
-	"\x13com.chatto.admin.v1B\rEventLogProtoP\x01ZMgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/admin/v1;adminv1\xa2\x02\x03CAX\xaa\x02\x0fChatto.Admin.V1\xca\x02\x0fChatto\\Admin\\V1\xe2\x02\x1bChatto\\Admin\\V1\\GPBMetadata\xea\x02\x11Chatto::Admin::V1b\x06proto3"
+	"\bGetEvent\x12 .chatto.admin.v1.GetEventRequest\x1a!.chatto.admin.v1.GetEventResponseB\xcb\x01\n" +
+	"\x13com.chatto.admin.v1B\rEventLogProtoP\x01ZGgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/admin/v1;adminv1\xa2\x02\x03CAX\xaa\x02\x0fChatto.Admin.V1\xca\x02\x0fChatto\\Admin\\V1\xe2\x02\x1bChatto\\Admin\\V1\\GPBMetadata\xea\x02\x11Chatto::Admin::V1b\x06proto3"
 
 var (
 	file_chatto_admin_v1_event_log_proto_rawDescOnce sync.Once

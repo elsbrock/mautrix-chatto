@@ -6,7 +6,7 @@ managed:
       module: buf.build/bufbuild/protovalidate
   override:
     - file_option: go_package_prefix
-      value: github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb
+      value: github.com/elsbrock/mautrix-chatto/pkg/chattopb
 plugins:
   - local: protoc-gen-go
     out: pkg/chattopb

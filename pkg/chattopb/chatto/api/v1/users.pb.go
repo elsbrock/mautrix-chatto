@@ -219,9 +219,9 @@ const file_chatto_api_v1_users_proto_rawDesc = "" +
 	"\x03bot\x18\v \x01(\v2\x16.chatto.api.v1.BotInfoR\x03botB\r\n" +
 	"\v_avatar_urlB\x06\n" +
 	"\x04_bioB\v\n" +
-	"\t_timezoneJ\x04\b\b\x10\tR\x06is_botB\xc0\x01\n" +
+	"\t_timezoneJ\x04\b\b\x10\tR\x06is_botB\xba\x01\n" +
 	"\x11com.chatto.api.v1B\n" +
-	"UsersProtoP\x01ZIgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
+	"UsersProtoP\x01ZCgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
 
 var (
 	file_chatto_api_v1_users_proto_rawDescOnce sync.Once

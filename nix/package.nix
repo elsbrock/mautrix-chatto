@@ -38,7 +38,7 @@ buildGoModule {
 
   meta = {
     description = "A Matrix-Chatto puppeting bridge";
-    homepage = "https://github.com/elsbrock/matrix-chatto-bridge";
+    homepage = "https://github.com/elsbrock/mautrix-chatto";
     license = lib.licenses.agpl3Plus;
     mainProgram = "mautrix-chatto";
     platforms = lib.platforms.linux ++ lib.platforms.darwin;

@@ -1320,8 +1320,8 @@ const file_chatto_api_v1_room_timeline_proto_rawDesc = "" +
 	"\x1dGetThreadEventsAroundResponse\x123\n" +
 	"\x04page\x18\x01 \x01(\v2\x1f.chatto.api.v1.RoomTimelinePageR\x04page\x12!\n" +
 	"\ftarget_index\x18\x02 \x01(\x05R\vtargetIndex\x12C\n" +
-	"\fviewer_state\x18\x03 \x01(\v2 .chatto.api.v1.ThreadViewerStateR\vviewerStateB\xc7\x01\n" +
-	"\x11com.chatto.api.v1B\x11RoomTimelineProtoP\x01ZIgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
+	"\fviewer_state\x18\x03 \x01(\v2 .chatto.api.v1.ThreadViewerStateR\vviewerStateB\xc1\x01\n" +
+	"\x11com.chatto.api.v1B\x11RoomTimelineProtoP\x01ZCgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
 
 var (
 	file_chatto_api_v1_room_timeline_proto_rawDescOnce sync.Once

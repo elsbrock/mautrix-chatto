@@ -397,8 +397,8 @@ const file_chatto_api_v1_common_proto_rawDesc = "" +
 	"\x1cROOM_THREADING_MODE_REQUIRED\x10\x01\x12\"\n" +
 	"\x1eROOM_THREADING_MODE_ENCOURAGED\x10\x02\x12\x1f\n" +
 	"\x1bROOM_THREADING_MODE_ENABLED\x10\x03\x12 \n" +
-	"\x1cROOM_THREADING_MODE_DISABLED\x10\x04B\xc1\x01\n" +
-	"\x11com.chatto.api.v1B\vCommonProtoP\x01ZIgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
+	"\x1cROOM_THREADING_MODE_DISABLED\x10\x04B\xbb\x01\n" +
+	"\x11com.chatto.api.v1B\vCommonProtoP\x01ZCgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
 
 var (
 	file_chatto_api_v1_common_proto_rawDescOnce sync.Once

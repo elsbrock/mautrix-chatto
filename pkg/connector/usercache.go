@@ -8,8 +8,8 @@ import (
 
 	"connectrpc.com/connect"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
-	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoclient"
+	apiv1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
 )
 
 // userCache caches Chatto users by ID and login for mention resolution and

@@ -8,7 +8,7 @@ package adminv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
-	v1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
+	v1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	fieldmaskpb "google.golang.org/protobuf/types/known/fieldmaskpb"
@@ -900,9 +900,9 @@ const file_chatto_admin_v1_roles_proto_rawDesc = "" +
 	"UpdateRole\x12\".chatto.admin.v1.UpdateRoleRequest\x1a#.chatto.admin.v1.UpdateRoleResponse\x12U\n" +
 	"\n" +
 	"DeleteRole\x12\".chatto.admin.v1.DeleteRoleRequest\x1a#.chatto.admin.v1.DeleteRoleResponse\x12[\n" +
-	"\fReorderRoles\x12$.chatto.admin.v1.ReorderRolesRequest\x1a%.chatto.admin.v1.ReorderRolesResponseB\xce\x01\n" +
+	"\fReorderRoles\x12$.chatto.admin.v1.ReorderRolesRequest\x1a%.chatto.admin.v1.ReorderRolesResponseB\xc8\x01\n" +
 	"\x13com.chatto.admin.v1B\n" +
-	"RolesProtoP\x01ZMgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/admin/v1;adminv1\xa2\x02\x03CAX\xaa\x02\x0fChatto.Admin.V1\xca\x02\x0fChatto\\Admin\\V1\xe2\x02\x1bChatto\\Admin\\V1\\GPBMetadata\xea\x02\x11Chatto::Admin::V1b\x06proto3"
+	"RolesProtoP\x01ZGgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/admin/v1;adminv1\xa2\x02\x03CAX\xaa\x02\x0fChatto.Admin.V1\xca\x02\x0fChatto\\Admin\\V1\xe2\x02\x1bChatto\\Admin\\V1\\GPBMetadata\xea\x02\x11Chatto::Admin::V1b\x06proto3"
 
 var (
 	file_chatto_admin_v1_roles_proto_rawDescOnce sync.Once

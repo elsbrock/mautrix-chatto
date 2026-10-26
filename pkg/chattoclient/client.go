@@ -13,12 +13,12 @@ import (
 
 	"connectrpc.com/connect"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/bridgemetrics"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/admin/v1/adminv1connect"
-	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1/apiv1connect"
-	discoveryv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/discovery/v1"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/discovery/v1/discoveryv1connect"
+	"github.com/elsbrock/mautrix-chatto/pkg/bridgemetrics"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/admin/v1/adminv1connect"
+	apiv1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1/apiv1connect"
+	discoveryv1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/discovery/v1"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/discovery/v1/discoveryv1connect"
 )
 
 // UpstreamVersion is the Chatto release whose protos are vendored in proto/.

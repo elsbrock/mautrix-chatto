@@ -17,12 +17,12 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/bridgemetrics"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattofmt"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
-	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/emoji"
+	"github.com/elsbrock/mautrix-chatto/pkg/bridgemetrics"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoclient"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattofmt"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoid"
+	apiv1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
+	"github.com/elsbrock/mautrix-chatto/pkg/emoji"
 )
 
 // idempotencyNamespace derives Chatto idempotency keys from Matrix event IDs,

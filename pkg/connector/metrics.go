@@ -8,7 +8,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/bridgemetrics"
+	"github.com/elsbrock/mautrix-chatto/pkg/bridgemetrics"
 )
 
 // startMetrics serves /metrics, /healthz and /readyz on the configured address.

@@ -17,8 +17,8 @@ import (
 
 	"maunium.net/go/mautrix/bridgev2"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoclient"
+	"github.com/elsbrock/mautrix-chatto/pkg/chattoid"
 )
 
 // OAuth with Chatto (ADR 0007): Chatto has no client registration. The

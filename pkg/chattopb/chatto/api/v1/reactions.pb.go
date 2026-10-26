@@ -428,8 +428,8 @@ const file_chatto_api_v1_reactions_proto_rawDesc = "" +
 	"\x04page\x18\x04 \x01(\v2\x1a.chatto.api.v1.PageRequestR\x04page\"c\n" +
 	"\x19ListReactionUsersResponse\x12\x19\n" +
 	"\buser_ids\x18\x01 \x03(\tR\auserIds\x12+\n" +
-	"\x04page\x18\x02 \x01(\v2\x17.chatto.api.v1.PageInfoR\x04pageB\xc4\x01\n" +
-	"\x11com.chatto.api.v1B\x0eReactionsProtoP\x01ZIgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
+	"\x04page\x18\x02 \x01(\v2\x17.chatto.api.v1.PageInfoR\x04pageB\xbe\x01\n" +
+	"\x11com.chatto.api.v1B\x0eReactionsProtoP\x01ZCgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
 
 var (
 	file_chatto_api_v1_reactions_proto_rawDescOnce sync.Once

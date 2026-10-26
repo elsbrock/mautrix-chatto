@@ -301,8 +301,8 @@ const file_chatto_api_v1_user_status_proto_rawDesc = "" +
 	"\x06status\x18\x01 \x01(\v2\x1f.chatto.api.v1.CustomUserStatusR\x06status\"\x1b\n" +
 	"\x19DeleteCustomStatusRequest\"U\n" +
 	"\x1aDeleteCustomStatusResponse\x127\n" +
-	"\x06status\x18\x01 \x01(\v2\x1f.chatto.api.v1.CustomUserStatusR\x06statusB\xc5\x01\n" +
-	"\x11com.chatto.api.v1B\x0fUserStatusProtoP\x01ZIgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
+	"\x06status\x18\x01 \x01(\v2\x1f.chatto.api.v1.CustomUserStatusR\x06statusB\xbf\x01\n" +
+	"\x11com.chatto.api.v1B\x0fUserStatusProtoP\x01ZCgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1;apiv1\xa2\x02\x03CAX\xaa\x02\rChatto.Api.V1\xca\x02\rChatto\\Api\\V1\xe2\x02\x19Chatto\\Api\\V1\\GPBMetadata\xea\x02\x0fChatto::Api::V1b\x06proto3"
 
 var (
 	file_chatto_api_v1_user_status_proto_rawDescOnce sync.Once

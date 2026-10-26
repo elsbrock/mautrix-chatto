@@ -8,7 +8,7 @@ package adminv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
-	v1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
+	v1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -1106,8 +1106,8 @@ const file_chatto_admin_v1_members_proto_rawDesc = "" +
 	"\x12ChangeUserPassword\x12*.chatto.admin.v1.ChangeUserPasswordRequest\x1a+.chatto.admin.v1.ChangeUserPasswordResponse\x12v\n" +
 	"\x15ClearUsernameCooldown\x12-.chatto.admin.v1.ClearUsernameCooldownRequest\x1a..chatto.admin.v1.ClearUsernameCooldownResponse\x12U\n" +
 	"\n" +
-	"DeleteUser\x12\".chatto.admin.v1.DeleteUserRequest\x1a#.chatto.admin.v1.DeleteUserResponseB\xd0\x01\n" +
-	"\x13com.chatto.admin.v1B\fMembersProtoP\x01ZMgithub.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/admin/v1;adminv1\xa2\x02\x03CAX\xaa\x02\x0fChatto.Admin.V1\xca\x02\x0fChatto\\Admin\\V1\xe2\x02\x1bChatto\\Admin\\V1\\GPBMetadata\xea\x02\x11Chatto::Admin::V1b\x06proto3"
+	"DeleteUser\x12\".chatto.admin.v1.DeleteUserRequest\x1a#.chatto.admin.v1.DeleteUserResponseB\xca\x01\n" +
+	"\x13com.chatto.admin.v1B\fMembersProtoP\x01ZGgithub.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/admin/v1;adminv1\xa2\x02\x03CAX\xaa\x02\x0fChatto.Admin.V1\xca\x02\x0fChatto\\Admin\\V1\xe2\x02\x1bChatto\\Admin\\V1\\GPBMetadata\xea\x02\x11Chatto::Admin::V1b\x06proto3"
 
 var (
 	file_chatto_admin_v1_members_proto_rawDescOnce sync.Once
