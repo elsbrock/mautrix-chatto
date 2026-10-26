@@ -77,8 +77,9 @@ func (c *ChattoClient) HandleSnapshot(ctx context.Context, snap *realtimev1.Real
 // HandleCaughtUp implements chattoclient.RealtimeHandler.
 func (c *ChattoClient) HandleCaughtUp(ctx context.Context, recovery realtimev1.RealtimeRecovery) {
 	if recovery == realtimev1.RealtimeRecovery_REALTIME_RECOVERY_LIVE_ONLY {
-		// Neither a replay nor a snapshot: list the rooms ourselves.
-		go c.syncAllRooms(ctx)
+		// Neither a replay nor a snapshot: list the rooms ourselves. This
+		// runs on the realtime goroutine like all other remote events.
+		c.syncAllRooms(ctx)
 	}
 }
 
@@ -300,7 +301,7 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 			c.sendRoomNotice(ctx, e.VoiceCallEnded.GetRoomId(), "", ts, "📞 The call on Chatto ended")
 		}
 	case *realtimev1.RealtimeEvent_RoomLayoutChanged:
-		go c.syncAllRooms(ctx)
+		c.syncAllRooms(ctx)
 	case *realtimev1.RealtimeEvent_RoomInvitationCreated:
 		c.handleInvitation(ctx, e.RoomInvitationCreated.GetRoomId(), e.RoomInvitationCreated.GetInvitationId())
 	default:

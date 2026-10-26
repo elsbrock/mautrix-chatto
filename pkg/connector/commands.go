@@ -159,15 +159,15 @@ func fnAcceptInvite(ce *commands.Event) {
 		ce.Reply("Invitations can only be accepted by human Chatto accounts.")
 		return
 	}
-	resp, err := cc.api.RoomInvitations.AcceptRoomInvitation(ce.Ctx, connect.NewRequest(&apiv1.AcceptRoomInvitationRequest{InvitationId: ce.Args[0]}))
+	_, err := cc.api.RoomInvitations.AcceptRoomInvitation(ce.Ctx, connect.NewRequest(&apiv1.AcceptRoomInvitationRequest{InvitationId: ce.Args[0]}))
 	if err != nil {
 		ce.Reply("Failed to accept invitation: %v", err)
 		return
 	}
+	// The resulting user_joined_room event creates the portal. Remote events
+	// are only queued from the realtime goroutine, because bridgev2 races
+	// when two goroutines queue the first events of a new portal.
 	ce.Reply("Invitation accepted.")
-	if roomID := resp.Msg.GetInvitation().GetRoomId(); roomID != "" {
-		cc.resyncRoom(ce.Ctx, roomID, true)
-	}
 }
 
 func fnServerInfo(ce *commands.Event) {

@@ -696,3 +696,73 @@ func ts(t time.Time) *timestamppb.Timestamp {
 	}
 	return timestamppb.New(t)
 }
+
+// ArchiveRoom archives a room and publishes the change.
+func (s *Server) ArchiveRoom(roomID string) {
+	s.mu.Lock()
+	s.rooms[roomID].Archived = true
+	s.mu.Unlock()
+	s.Publish(roomID, "", &realtimev1.RealtimeEvent{Event: &realtimev1.RealtimeEvent_RoomArchived{
+		RoomArchived: &realtimev1.RoomArchivedEvent{RoomId: roomID},
+	}})
+}
+
+// DeleteRoom deletes a room and publishes the change to its members.
+func (s *Server) DeleteRoom(roomID string) {
+	s.Publish(roomID, "", &realtimev1.RealtimeEvent{Event: &realtimev1.RealtimeEvent_RoomDeleted{
+		RoomDeleted: &realtimev1.RoomDeletedEvent{RoomId: roomID},
+	}})
+	s.mu.Lock()
+	delete(s.rooms, roomID)
+	s.mu.Unlock()
+}
+
+// SetThreadingMode changes a room's threading mode and publishes it.
+func (s *Server) SetThreadingMode(roomID string, mode apiv1.RoomThreadingMode) {
+	s.mu.Lock()
+	s.rooms[roomID].ThreadingMode = mode
+	s.mu.Unlock()
+	s.Publish(roomID, "", &realtimev1.RealtimeEvent{Event: &realtimev1.RealtimeEvent_RoomThreadingModeChanged{
+		RoomThreadingModeChanged: &realtimev1.RoomThreadingModeChangedEvent{RoomId: roomID, ThreadingMode: mode},
+	}})
+}
+
+// PublishToUser delivers an event to one user's subscriptions only, like
+// invitation events.
+func (s *Server) PublishToUser(userID string, evt *realtimev1.RealtimeEvent) {
+	s.mu.Lock()
+	if evt.Id == "" {
+		evt.Id = s.newID("V")
+	}
+	if evt.CreatedAt == nil {
+		evt.CreatedAt = timestamppb.Now()
+	}
+	le := &loggedEvent{seq: len(s.events) + 1, roomID: "", evt: evt}
+	s.events = append(s.events, le)
+	var targets []*subscription
+	for sub := range s.subs {
+		if sub.userID == userID {
+			targets = append(targets, sub)
+		}
+	}
+	s.mu.Unlock()
+	for _, sub := range targets {
+		sub.send(eventFrame(le))
+	}
+}
+
+// RevokeSessions invalidates every session of a user.
+func (s *Server) RevokeSessions(userID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for tok, sess := range s.sessions {
+		if sess.userID == userID {
+			delete(s.sessions, tok)
+		}
+	}
+	for tok, sess := range s.refresh {
+		if sess.userID == userID {
+			delete(s.refresh, tok)
+		}
+	}
+}

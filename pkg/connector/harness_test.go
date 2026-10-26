@@ -20,6 +20,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/commands"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
@@ -273,4 +274,12 @@ func (h *harness) dbMessage(chattoID string) []*database.Message {
 		h.t.Fatal(err)
 	}
 	return parts
+}
+
+// loginState returns the last state recorded for a login. BridgeStateQueue
+// itself is not safe to read from tests.
+func (c *Connector) loginState(id networkid.UserLoginID) status.BridgeStateEvent {
+	c.loginStatesLock.Lock()
+	defer c.loginStatesLock.Unlock()
+	return c.loginStates[id]
 }
