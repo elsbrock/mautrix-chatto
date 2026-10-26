@@ -235,3 +235,13 @@ func TestPinsReachMatrix(t *testing.T) {
 		return len(pinnedState()) == 0 && len(w.mx.Events(func(e *sentEvent) bool { return e.Type == event.StatePinnedEvents })) == 2
 	})
 }
+
+func TestLiveOnlyRecoverySyncsRooms(t *testing.T) {
+	h := newHarness(t)
+	alice := h.srv.AddUser("alice", "Alice", "pw")
+	room := h.srv.AddChannel("listed", "", alice.ID)
+	h.srv.LiveOnly.Store(true)
+	h.login(aliceMXID, "alice", "pw")
+	// No snapshot arrives, so the bridge must list rooms itself.
+	h.portal(room.ID)
+}

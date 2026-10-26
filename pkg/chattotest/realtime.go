@@ -215,7 +215,7 @@ func (s *Server) handleRealtime(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if result != realtimev1.RealtimeRecovery_REALTIME_RECOVERY_RESUMED {
-		if sub.GetInitialState() == realtimev1.RealtimeInitialState_REALTIME_INITIAL_STATE_LIVE_ONLY {
+		if sub.GetInitialState() == realtimev1.RealtimeInitialState_REALTIME_INITIAL_STATE_LIVE_ONLY || s.LiveOnly.Load() {
 			result = realtimev1.RealtimeRecovery_REALTIME_RECOVERY_LIVE_ONLY
 		} else {
 			recovery = append(recovery, &realtimev1.RealtimeServerFrame{Frame: &realtimev1.RealtimeServerFrame_Snapshot{

@@ -122,6 +122,9 @@ type Server struct {
 	MaxChunkSize int32
 	// DirectLogin enables password login.
 	DirectLogin bool
+	// LiveOnly makes subscriptions that cannot resume start live, without a
+	// snapshot, as when the server cannot build one.
+	LiveOnly atomic.Bool
 	// TokenEndpointDown makes /oauth/token answer 503.
 	TokenEndpointDown atomic.Bool
 	// FailGetMessage makes the next n GetMessage calls fail as unavailable.

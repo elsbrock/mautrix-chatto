@@ -1,10 +1,12 @@
 package connector
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
+	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
@@ -131,5 +133,41 @@ func TestGhostBotLogin(t *testing.T) {
 	}
 	if ghostBotLogin("mx-", "@a:x") == ghostBotLogin("mx-", "@a:y") {
 		t.Error("different users must not share a login")
+	}
+}
+
+func TestGhostBotsFallBackToPrefixWithBotRelay(t *testing.T) {
+	h := newHarness(t, withGhostBots())
+	owner := h.srv.AddUser("owner", "Owner", "pw")
+	bot, key := h.srv.AddBot("relaybot", "Relay Bot", owner.ID)
+	room := h.srv.AddChannel("bots", "", owner.ID, bot.ID)
+	user, _ := h.br.GetUserByMXID(h.ctx, "@botowner:test")
+	proc, _ := h.conn.CreateLogin(h.ctx, user, LoginFlowToken)
+	_, _ = proc.Start(h.ctx)
+	step, err := proc.(interface {
+		SubmitUserInput(context.Context, map[string]string) (*bridgev2.LoginStep, error)
+	}).SubmitUserInput(h.ctx, map[string]string{"token": key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dbPortal := h.portal(room.ID)
+	portal, _ := h.br.GetPortalByKey(h.ctx, chattoid.MakePortalKey(room.ID))
+	if err := portal.SetRelay(h.ctx, step.CompleteParams.UserLogin); err != nil {
+		t.Fatal(err)
+	}
+	h.mx.mu.Lock()
+	h.mx.rooms[dbPortal.MXID].members[carolMXID] = event.MembershipJoin
+	h.mx.mu.Unlock()
+	h.sendMatrix(dbPortal.MXID, carolMXID, event.EventMessage, &event.MessageEventContent{MsgType: event.MsgText, Body: "via a bot relay"})
+	h.eventually("prefixed relay message", func() bool {
+		for _, m := range h.srv.Messages(room.ID) {
+			if strings.Contains(m.Body, "via a bot relay") {
+				return m.ActorID == bot.ID && strings.Contains(m.Body, "carol")
+			}
+		}
+		return false
+	})
+	if len(h.srv.Bots()) != 1 {
+		t.Fatal("a bot relay must not create ghost bots")
 	}
 }
