@@ -62,6 +62,17 @@ regression tests:
 - no-op edits, receipts on notices, lock contention, a metadata race, and
   URL tickets in logs
 
+The second, on the NixOS module, config, security and formatting, found 11
+more, also fixed:
+- Chatto would have rejected the OAuth metadata document (cross-origin
+  `client_uri`)
+- an OAuth link could be forwarded to someone else; there's now a
+  confirmation page naming the Matrix account
+- the Synapse address and first-boot ordering were wrong
+- Synapse could read the bridge database
+- `2*3*4` rendered as italics
+- ghost bots broke across different relay logins
+
 GitHub Actions runs lint, race tests, fuzzing, a generated-code drift check,
 `nix flake check` and `nix build`.
 
