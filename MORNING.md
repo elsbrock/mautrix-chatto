@@ -50,6 +50,21 @@ bridge on SQLite:
     lint, nixfmt, alert rules, NixOS module)
   - `go test -race` and golangci-lint are clean
 
+## How it was checked
+
+Besides the tests, two independent code reviews ran overnight against the
+Chatto and mautrix sources. The first found 11 issues, all fixed with
+regression tests:
+- a refresh outage was reported as "logged out"
+- forward fill broke when the newest message was a thread reply
+- an event was dropped when a fetch failed transiently
+- an edit could turn captioned media into text
+- no-op edits, receipts on notices, lock contention, a metadata race, and
+  URL tickets in logs
+
+GitHub Actions runs lint, race tests, fuzzing, a generated-code drift check,
+`nix flake check` and `nix build`.
+
 ## Try it on your NixOS homelab (≈10 minutes)
 
 1. **Add the flake input and module** (full snippet in the README):
