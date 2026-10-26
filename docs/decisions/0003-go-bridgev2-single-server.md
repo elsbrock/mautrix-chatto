@@ -1,6 +1,6 @@
 # 0003: Go and mautrix bridgev2, one Chatto server per bridge
 
-Status: accepted (2026-10-25)
+Status: accepted (2026-10-25). The one-server rule is superseded by 0012.
 
 ## Decision
 - Written in Go on mautrix-go `bridgev2` (v0.32), following mautrix-signal's

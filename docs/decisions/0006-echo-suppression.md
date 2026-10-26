@@ -13,7 +13,7 @@ which only happens after the response.
   Retries of the same Matrix event within Chatto's 30-minute window return the
   original message instead of duplicating it.
 - One `echoTracker` per bridge (not per login) counts in-flight sends per
-  room. A `message_posted` whose author could be the bridge (any logged-in
+  room, keyed by the server-prefixed portal ID. A `message_posted` whose author could be the bridge (any logged-in
   account or ghost bot) waits for the room's in-flight sends to finish, for up
   to 15 s. It is then dropped if one of those sends returned its ID. IDs are
   remembered for 10 minutes. Messages from other users never wait. Messages

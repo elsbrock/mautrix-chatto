@@ -3,16 +3,21 @@
 Status: accepted (2026-10-25)
 
 ## Decision
+- **Server prefix:** every network ID below is prefixed with the server
+  `id` and a dot (0012). The examples omit it.
 - **Ghosts:** a ghost ID is the Chatto user ID (`U…`). A login ID is also the
   Chatto user ID, so two Matrix users can never hold the same Chatto account.
 - **Portals:** a portal ID is the room ID (`R…`). Receivers are never split:
   room IDs are global on the server, and a DM is one room shared by its
   participants.
-- **Spaces:** room groups become space portals with the ID `group:<G…>`.
-  Channels set `ParentID` to their group. DMs have no space.
+- **Spaces:** each server is a space portal with the ID `server`. Channels
+  and DMs set `ParentID` to it. With `group_spaces`, room groups become space
+  portals with the ID `group:<G…>`, their parent is the server space, and
+  channels in a group set `ParentID` to the group instead.
 - **Messages:** a message ID is the event ID (`E…`). The realtime event ID
   equals the message ID for `message_posted`. The text body is part `""`, and
-  each attachment is part `att:<attachment id>`.
+  each attachment is part `att:<attachment id>`. Bridge notices use
+  `notice:<server>.<room>:<nanos>`.
 - **Captions:** a Chatto message with text and attachments becomes separate
   Matrix events rather than a captioned media event. An edit then changes
   exactly one Matrix event, and attachments that finish processing replace
