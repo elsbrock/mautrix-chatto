@@ -26,16 +26,27 @@ const (
 	portalKindDM      = "dm"
 	portalKindGroupDM = "group_dm"
 	portalKindSpace   = "space"
+	portalKindServer  = "server"
 
 	// maxMemberSync caps how many channel members are synced to Matrix.
 	maxMemberSync = 2000
 )
 
 func (c *ChattoClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
-	roomID, groupID := chattoid.ParsePortalID(portal.ID)
-	if groupID != "" {
-		return c.getGroupInfo(ctx, groupID)
+	srv, kind, chattoID := chattoid.ParsePortalID(portal.ID)
+	if srv != c.serverID {
+		return nil, ErrServerMismatch
 	}
+	switch kind {
+	case chattoid.PortalServer:
+		return c.getServerInfo(ctx), nil
+	case chattoid.PortalGroup:
+		return c.getGroupInfo(ctx, chattoID)
+	case chattoid.PortalRoom:
+	default:
+		return nil, fmt.Errorf("invalid portal ID %q", portal.ID)
+	}
+	roomID := chattoID
 	resp, err := c.api.RoomDirectory.GetRoom(ctx, connect.NewRequest(&apiv1.GetRoomRequest{RoomId: roomID}))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get room: %w", err)
@@ -80,11 +91,12 @@ func (c *ChattoClient) roomToChatInfo(ctx context.Context, rws *apiv1.RoomWithVi
 		for _, uid := range members {
 			info.Members.MemberMap.Set(c.makeMember(uid))
 		}
+		info.ParentID = ptr.Ptr(chattoid.MakeServerPortalID(c.serverID))
 		if len(members) <= 2 {
 			info.Type = ptr.Ptr(database.RoomTypeDM)
 			for _, uid := range members {
 				if uid != c.userID {
-					info.Members.OtherUserID = chattoid.MakeUserID(uid)
+					info.Members.OtherUserID = c.ghostID(uid)
 				}
 			}
 		} else {
@@ -94,11 +106,7 @@ func (c *ChattoClient) roomToChatInfo(ctx context.Context, rws *apiv1.RoomWithVi
 		info.Type = ptr.Ptr(database.RoomTypeDefault)
 		info.Name = ptr.Ptr(room.GetName())
 		info.Topic = ptr.Ptr(channelTopic(room))
-		if room.GetGroupId() != "" {
-			info.ParentID = ptr.Ptr(chattoid.MakeGroupPortalID(room.GetGroupId()))
-		} else {
-			info.ParentID = ptr.Ptr(networkid.PortalID(""))
-		}
+		info.ParentID = ptr.Ptr(c.channelParent(room))
 		if withMembers {
 			members, full, err := c.listMembers(ctx, room.GetId())
 			if err != nil {
@@ -109,7 +117,7 @@ func (c *ChattoClient) roomToChatInfo(ctx context.Context, rws *apiv1.RoomWithVi
 					MemberMap: make(bridgev2.ChatMemberMap, len(members)),
 				}
 				for _, uid := range members {
-					if c.Main.IsGhostBot(ctx, uid) {
+					if c.Main.IsGhostBot(ctx, c.ghostID(uid)) {
 						continue
 					}
 					info.Members.MemberMap.Set(c.makeMember(uid))
@@ -148,7 +156,7 @@ func (c *ChattoClient) makeMember(userID string) bridgev2.ChatMember {
 func (c *ChattoClient) makeEventSender(userID string) bridgev2.EventSender {
 	sender := bridgev2.EventSender{
 		IsFromMe: userID == c.userID,
-		Sender:   chattoid.MakeUserID(userID),
+		Sender:   c.ghostID(userID),
 	}
 	if sender.IsFromMe {
 		sender.SenderLogin = c.UserLogin.ID
@@ -179,6 +187,57 @@ func (c *ChattoClient) listMembers(ctx context.Context, roomID string) ([]string
 	}
 }
 
+// channelParent returns the space a channel belongs to: its room group
+// with group_spaces, otherwise the server space.
+func (c *ChattoClient) channelParent(room *apiv1.Room) networkid.PortalID {
+	if c.Main.Config.GroupSpaces && room.GetGroupId() != "" {
+		return chattoid.MakeGroupPortalID(c.serverID, room.GetGroupId())
+	}
+	return chattoid.MakeServerPortalID(c.serverID)
+}
+
+// getServerInfo builds the top-level space portal of this login's server
+// from its public profile. Without a profile the space is named after the
+// server ID; it is refreshed whenever a login of the server connects.
+func (c *ChattoClient) getServerInfo(ctx context.Context) *bridgev2.ChatInfo {
+	info := &bridgev2.ChatInfo{
+		Name: ptr.Ptr(c.serverID),
+		Type: ptr.Ptr(database.RoomTypeSpace),
+		Members: &bridgev2.ChatMemberList{
+			IsFull:    false,
+			MemberMap: bridgev2.ChatMemberMap{}.Set(c.makeMember(c.userID)),
+		},
+		ExtraUpdates: func(_ context.Context, portal *bridgev2.Portal) bool {
+			meta := portal.Metadata.(*chattoid.PortalMetadata)
+			if meta.Kind == portalKindServer {
+				return false
+			}
+			meta.Kind = portalKindServer
+			return true
+		},
+	}
+	profile, err := c.api.ServerProfile(ctx)
+	if err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to fetch Chatto server profile")
+		return info
+	}
+	if profile.GetName() != "" {
+		info.Name = ptr.Ptr(profile.GetName())
+	}
+	info.Topic = ptr.Ptr(profile.GetDescription())
+	if logo := c.api.ResolveURL(profile.GetLogoUrl()); logo != "" {
+		info.Avatar = &bridgev2.Avatar{
+			ID: networkid.AvatarID(logo),
+			Get: func(ctx context.Context) ([]byte, error) {
+				return c.downloadPublic(ctx, logo, 10<<20)
+			},
+		}
+	} else {
+		info.Avatar = &bridgev2.Avatar{Remove: true}
+	}
+	return info
+}
+
 // getGroupInfo builds the space portal of a Chatto room group.
 func (c *ChattoClient) getGroupInfo(ctx context.Context, groupID string) (*bridgev2.ChatInfo, error) {
 	resp, err := c.api.RoomDirectory.GetRoomGroup(ctx, connect.NewRequest(&apiv1.GetRoomGroupRequest{GroupId: groupID}))
@@ -187,9 +246,10 @@ func (c *ChattoClient) getGroupInfo(ctx context.Context, groupID string) (*bridg
 	}
 	group := resp.Msg.GetGroup()
 	return &bridgev2.ChatInfo{
-		Name:  ptr.Ptr(group.GetName()),
-		Topic: ptr.Ptr(group.GetDescription()),
-		Type:  ptr.Ptr(database.RoomTypeSpace),
+		Name:     ptr.Ptr(group.GetName()),
+		Topic:    ptr.Ptr(group.GetDescription()),
+		Type:     ptr.Ptr(database.RoomTypeSpace),
+		ParentID: ptr.Ptr(chattoid.MakeServerPortalID(c.serverID)),
 		Members: &bridgev2.ChatMemberList{
 			IsFull:    false,
 			MemberMap: bridgev2.ChatMemberMap{}.Set(c.makeMember(c.userID)),
@@ -206,7 +266,11 @@ func (c *ChattoClient) getGroupInfo(ctx context.Context, groupID string) (*bridg
 }
 
 func (c *ChattoClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {
-	user, err := c.users.Get(ctx, chattoid.ParseUserID(ghost.ID))
+	userID, ok := c.chattoUserID(ghost.ID)
+	if !ok {
+		return nil, ErrServerMismatch
+	}
+	user, err := c.users.Get(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}

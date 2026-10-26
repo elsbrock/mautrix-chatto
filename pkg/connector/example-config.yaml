@@ -1,6 +1,16 @@
-# Base URL of the Chatto server, e.g. https://chat.example.com.
-# One bridge instance serves exactly one Chatto server.
-server_url: https://chat.example.com
+# The Chatto servers to bridge. Each server becomes a Matrix space.
+# id:  a short name (a-z, 0-9 and -, at most 16 characters). It is part of
+#      every bridged room, user and message ID, including ghost Matrix IDs,
+#      so it must never change. Renaming it orphans everything bridged so far.
+# url: base URL of the server. This may change if the server moves.
+servers:
+    - id: main
+      url: https://chat.example.com
+
+# Should Chatto room groups become subspaces of the server space? When false,
+# all channels sit directly in the server space. Turning this off later
+# leaves the existing group spaces behind.
+group_spaces: false
 
 # Displayname template for Chatto users.
 # {{.DisplayName}} - the display name set on Chatto (may be empty)

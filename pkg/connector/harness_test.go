@@ -28,12 +28,17 @@ import (
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattotest"
 )
 
-// harness wires a real bridgev2 Bridge to a fake Chatto server and a mock
+// testServer is the ID of the harness's primary fake Chatto server.
+const testServer = "main"
+
+// harness wires a real bridgev2 Bridge to fake Chatto servers and a mock
 // homeserver.
 type harness struct {
-	t    *testing.T
-	ctx  context.Context
+	t   *testing.T
+	ctx context.Context
+	// srv is the primary server (testServer); srvs has all of them by ID.
 	srv  *chattotest.Server
+	srvs map[string]*chattotest.Server
 	mx   *mockMatrix
 	br   *bridgev2.Bridge
 	conn *Connector
@@ -45,6 +50,8 @@ type harnessConfig struct {
 	network *Config
 	// publicRouter serves the bridge's public HTTP routes (OAuth).
 	publicRouter bool
+	// extraServers are further fake servers, by configured ID.
+	extraServers []string
 }
 
 type harnessOpt func(*harnessConfig)
@@ -60,6 +67,11 @@ func withBackfill(n int) harnessOpt {
 
 func withPublicRouter() harnessOpt {
 	return func(hc *harnessConfig) { hc.publicRouter = true }
+}
+
+// withServer adds another fake Chatto server with the given ID.
+func withServer(serverID string) harnessOpt {
+	return func(hc *harnessConfig) { hc.extraServers = append(hc.extraServers, serverID) }
 }
 
 var harnessCounter int
@@ -110,7 +122,7 @@ func newHarness(t *testing.T, opts ...harnessOpt) *harness {
 	}
 	conn := &Connector{HTTPClient: httpClientNoRedirectLimit, Version: "test"}
 	conn.Config = Config{
-		ServerURL:          srv.URL(),
+		Servers:            []ServerConfig{{ID: testServer, URL: srv.URL()}},
 		SyncPresence:       true,
 		CallNotices:        true,
 		ThreadEcho:         "skip",
@@ -119,6 +131,13 @@ func newHarness(t *testing.T, opts ...harnessOpt) *harness {
 	hc := &harnessConfig{bridge: cfg, network: &conn.Config}
 	for _, o := range opts {
 		o(hc)
+	}
+	srvs := map[string]*chattotest.Server{testServer: srv}
+	for _, serverID := range hc.extraServers {
+		extra := chattotest.New()
+		t.Cleanup(extra.Close)
+		srvs[serverID] = extra
+		conn.Config.Servers = append(conn.Config.Servers, ServerConfig{ID: serverID, URL: extra.URL()})
 	}
 	if err := conn.Config.PostProcess(); err != nil {
 		t.Fatal(err)
@@ -146,18 +165,25 @@ func newHarness(t *testing.T, opts ...harnessOpt) *harness {
 		br.StopWithTimeout(5 * time.Second)
 		cancel()
 	})
-	return &harness{t: t, ctx: ctx, srv: srv, mx: mx, br: br, conn: conn}
+	return &harness{t: t, ctx: ctx, srv: srv, srvs: srvs, mx: mx, br: br, conn: conn}
 }
 
 // login logs mxid into Chatto with a password and waits for the realtime
 // subscription to be up.
 func (h *harness) login(mxid id.UserID, chattoLogin, password string) *bridgev2.UserLogin {
 	h.t.Helper()
+	return h.loginOn(testServer, mxid, chattoLogin, password)
+}
+
+// loginOn is login on a specific server.
+func (h *harness) loginOn(serverID string, mxid id.UserID, chattoLogin, password string) *bridgev2.UserLogin {
+	h.t.Helper()
+	srv := h.srvs[serverID]
 	user, err := h.br.GetUserByMXID(h.ctx, mxid)
 	if err != nil {
 		h.t.Fatal(err)
 	}
-	before := h.srv.Subscribers()
+	before := srv.Subscribers()
 	proc, err := h.conn.CreateLogin(h.ctx, user, LoginFlowPassword)
 	if err != nil {
 		h.t.Fatal(err)
@@ -165,14 +191,18 @@ func (h *harness) login(mxid id.UserID, chattoLogin, password string) *bridgev2.
 	if _, err := proc.Start(h.ctx); err != nil {
 		h.t.Fatal(err)
 	}
-	step, err := proc.(bridgev2.LoginProcessUserInput).SubmitUserInput(h.ctx, map[string]string{"login": chattoLogin, "password": password})
+	input := map[string]string{"login": chattoLogin, "password": password}
+	if len(h.srvs) > 1 {
+		input[serverFieldID] = serverID
+	}
+	step, err := proc.(bridgev2.LoginProcessUserInput).SubmitUserInput(h.ctx, input)
 	if err != nil {
 		h.t.Fatalf("login failed: %v", err)
 	}
 	if step.Type != bridgev2.LoginStepTypeComplete {
 		h.t.Fatalf("unexpected step %v", step.Type)
 	}
-	if !h.srv.WaitForSubscribers(before+1, 5*time.Second) {
+	if !srv.WaitForSubscribers(before+1, 5*time.Second) {
 		h.t.Fatal("realtime subscription did not start")
 	}
 	return step.CompleteParams.UserLogin
@@ -198,7 +228,7 @@ func (h *harness) eventually(what string, cond func() bool) {
 // the database row so that it never races with the portal's event loop.
 func (h *harness) portal(roomID string) *database.Portal {
 	h.t.Helper()
-	return h.portalByID(chattoid.MakePortalKey(roomID))
+	return h.portalByID(chattoid.MakePortalKey(testServer, roomID))
 }
 
 func (h *harness) portalByID(key networkid.PortalKey) *database.Portal {
@@ -267,9 +297,10 @@ func (h *harness) sendMatrix(roomID id.RoomID, sender id.UserID, evtType event.T
 	return evtID
 }
 
-// dbMessage returns the bridged message parts for a Chatto message ID.
+// dbMessage returns the bridged message parts for a Chatto message ID on the
+// primary server.
 func (h *harness) dbMessage(chattoID string) []*database.Message {
-	parts, err := h.br.DB.Message.GetAllPartsByID(h.ctx, "", chattoid.MakeMessageID(chattoID))
+	parts, err := h.br.DB.Message.GetAllPartsByID(h.ctx, "", chattoid.MakeMessageID(testServer, chattoID))
 	if err != nil {
 		h.t.Fatal(err)
 	}

@@ -28,11 +28,11 @@ func withGhostBots() harnessOpt {
 func (w *world) setRelay(t *testing.T) id.RoomID {
 	t.Helper()
 	dbPortal := w.portal(w.room.ID)
-	portal, err := w.br.GetPortalByKey(w.ctx, chattoid.MakePortalKey(w.room.ID))
+	portal, err := w.br.GetPortalByKey(w.ctx, chattoid.MakePortalKey(testServer, w.room.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
-	login := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(w.alice.ID))
+	login := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(testServer, w.alice.ID))
 	if err := portal.SetRelay(w.ctx, login); err != nil {
 		t.Fatal(err)
 	}
@@ -103,13 +103,13 @@ func TestGhostBotsPostAsDedicatedAccounts(t *testing.T) {
 		t.Fatalf("second message created another bot")
 	}
 	// Ghost bots never get Matrix ghosts of their own.
-	login := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(w.alice.ID))
+	login := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(testServer, w.alice.ID))
 	contacts, err := login.Client.(*ChattoClient).GetContactList(w.ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range contacts {
-		if c.UserID == chattoid.MakeUserID(bots[0].ID) {
+		if c.UserID == chattoid.MakeUserID(testServer, bots[0].ID) {
 			t.Fatal("ghost bot appears in the contact list")
 		}
 	}
@@ -151,7 +151,7 @@ func TestGhostBotsFallBackToPrefixWithBotRelay(t *testing.T) {
 		t.Fatal(err)
 	}
 	dbPortal := h.portal(room.ID)
-	portal, _ := h.br.GetPortalByKey(h.ctx, chattoid.MakePortalKey(room.ID))
+	portal, _ := h.br.GetPortalByKey(h.ctx, chattoid.MakePortalKey(testServer, room.ID))
 	if err := portal.SetRelay(h.ctx, step.CompleteParams.UserLogin); err != nil {
 		t.Fatal(err)
 	}

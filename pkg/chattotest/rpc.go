@@ -202,7 +202,11 @@ type discoveryService struct {
 }
 
 func (d *discoveryService) GetServer(context.Context, *connect.Request[discoveryv1.GetServerRequest]) (*connect.Response[discoveryv1.GetServerResponse], error) {
-	return connect.NewResponse(&discoveryv1.GetServerResponse{Profile: &apiv1.ServerPublicProfile{Version: Version, Name: "Fake Chatto"}}), nil
+	name := d.s.Name
+	if name == "" {
+		name = "Fake Chatto"
+	}
+	return connect.NewResponse(&discoveryv1.GetServerResponse{Profile: &apiv1.ServerPublicProfile{Version: Version, Name: name}}), nil
 }
 
 type viewerService struct {

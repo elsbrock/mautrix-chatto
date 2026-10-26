@@ -17,7 +17,7 @@ import (
 func TestTokenEndpointOutageIsNotBadCredentials(t *testing.T) {
 	w := newWorld(t)
 	portal := w.portal(w.room.ID)
-	login := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(w.alice.ID))
+	login := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(testServer, w.alice.ID))
 	w.srv.TokenEndpointDown.Store(true)
 	w.srv.ExpireAccessTokens()
 	w.srv.CloseRealtime(realtimev1.RealtimeCloseCode_REALTIME_CLOSE_CODE_AUTHENTICATION_REQUIRED, true, 0)

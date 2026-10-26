@@ -9,7 +9,6 @@ import (
 	"connectrpc.com/connect"
 	"maunium.net/go/mautrix/bridgev2"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
 	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
 )
 
@@ -58,7 +57,7 @@ func (c *ChattoClient) ResolveIdentifier(ctx context.Context, identifier string,
 }
 
 func (c *ChattoClient) userToResolveResponse(ctx context.Context, user *apiv1.User) (*bridgev2.ResolveIdentifierResponse, error) {
-	userID := chattoid.MakeUserID(user.GetId())
+	userID := c.ghostID(user.GetId())
 	ghost, err := c.Main.Bridge.GetGhostByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ghost: %w", err)
@@ -87,11 +86,15 @@ func (c *ChattoClient) startDM(ctx context.Context, userID string) (*bridgev2.Cr
 	if err != nil {
 		return nil, err
 	}
-	return &bridgev2.CreateChatResponse{PortalKey: chattoid.MakePortalKey(roomID), PortalInfo: info}, nil
+	return &bridgev2.CreateChatResponse{PortalKey: c.portalKey(roomID), PortalInfo: info}, nil
 }
 
 func (c *ChattoClient) CreateChatWithGhost(ctx context.Context, ghost *bridgev2.Ghost) (*bridgev2.CreateChatResponse, error) {
-	return c.startDM(ctx, chattoid.ParseUserID(ghost.ID))
+	userID, ok := c.chattoUserID(ghost.ID)
+	if !ok {
+		return nil, ErrServerMismatch
+	}
+	return c.startDM(ctx, userID)
 }
 
 func (c *ChattoClient) GetContactList(ctx context.Context) ([]*bridgev2.ResolveIdentifierResponse, error) {
@@ -113,7 +116,7 @@ func (c *ChattoClient) listUsers(ctx context.Context, search string, limit int32
 	out := make([]*bridgev2.ResolveIdentifierResponse, 0, len(resp.Msg.GetUsers()))
 	for _, member := range resp.Msg.GetUsers() {
 		user := member.GetUser()
-		if user.GetDeleted() || user.GetId() == c.userID || c.Main.IsGhostBot(ctx, user.GetId()) {
+		if user.GetDeleted() || user.GetId() == c.userID || c.Main.IsGhostBot(ctx, c.ghostID(user.GetId())) {
 			continue
 		}
 		c.users.Put(user)

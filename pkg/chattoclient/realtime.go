@@ -220,7 +220,7 @@ func (r *Realtime) Run(ctx context.Context) error {
 		case errors.Is(err, errHandlerFailed):
 			reason = "handler_error"
 		}
-		bridgemetrics.RealtimeReconnects.WithLabelValues(reason).Inc()
+		bridgemetrics.RealtimeReconnects.WithLabelValues(r.client.server, reason).Inc()
 		r.handler.HandleState(RealtimeTransientDisconnect, err)
 		// Full jitter in [delay/2, delay] avoids reconnect stampedes.
 		sleep := delay/2 + time.Duration(rand.Int64N(int64(delay/2)+1))
@@ -377,7 +377,7 @@ func (r *Realtime) runOnce(ctx context.Context) (connected bool, err error) {
 			connected = true
 			bridgemetrics.RealtimeConnected.WithLabelValues(r.label).Set(1)
 			result := strings.ToLower(strings.TrimPrefix(f.CaughtUp.GetRecovery().String(), "REALTIME_RECOVERY_"))
-			bridgemetrics.RealtimeRecoveries.WithLabelValues(result).Inc()
+			bridgemetrics.RealtimeRecoveries.WithLabelValues(r.client.server, result).Inc()
 			if snapshot != nil {
 				r.handler.HandleSnapshot(ctx, snapshot)
 				snapshot = nil
@@ -401,7 +401,7 @@ func (r *Realtime) runOnce(ctx context.Context) (connected bool, err error) {
 }
 
 func (r *Realtime) observeEvent(evt *realtimev1.RealtimeEvent) {
-	bridgemetrics.RealtimeEvents.WithLabelValues(EventType(evt)).Inc()
+	bridgemetrics.RealtimeEvents.WithLabelValues(r.client.server, EventType(evt)).Inc()
 	if ts := evt.GetCreatedAt(); ts != nil {
 		lag := time.Since(ts.AsTime())
 		if lag >= 0 {

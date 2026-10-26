@@ -39,7 +39,7 @@ func TestChattoMessageReachesMatrix(t *testing.T) {
 	msg := w.srv.PostMessage(w.bob.ID, w.room.ID, "hello **world** @alice")
 	evt := w.waitMessage(portal.MXID, "hello")
 	content := evt.Message()
-	if evt.Sender != w.mx.FormatGhostMXID(chattoid.MakeUserID(w.bob.ID)) {
+	if evt.Sender != w.mx.FormatGhostMXID(chattoid.MakeUserID(testServer, w.bob.ID)) {
 		t.Errorf("sender %s is not bob's ghost", evt.Sender)
 	}
 	if content.Format != event.FormatHTML || content.FormattedBody == "" {
@@ -61,7 +61,7 @@ func TestChattoMessageReachesMatrix(t *testing.T) {
 func TestMatrixMessageReachesChatto(t *testing.T) {
 	w := newWorld(t)
 	portal := w.portal(w.room.ID)
-	bobGhost := w.mx.FormatGhostMXID(chattoid.MakeUserID(w.bob.ID))
+	bobGhost := w.mx.FormatGhostMXID(chattoid.MakeUserID(testServer, w.bob.ID))
 	w.sendMatrix(portal.MXID, aliceMXID, event.EventMessage, &event.MessageEventContent{
 		MsgType:       event.MsgText,
 		Body:          "hi Bob",
@@ -84,7 +84,7 @@ func TestMatrixMessageReachesChatto(t *testing.T) {
 	// The realtime echo must not come back to Matrix as a second message.
 	time.Sleep(300 * time.Millisecond)
 	for _, e := range w.messagesIn(portal.MXID) {
-		if e.Sender == aliceMXID || e.Sender == w.mx.FormatGhostMXID(chattoid.MakeUserID(w.alice.ID)) {
+		if e.Sender == aliceMXID || e.Sender == w.mx.FormatGhostMXID(chattoid.MakeUserID(testServer, w.alice.ID)) {
 			t.Fatalf("echo was bridged back: %+v", e.Message())
 		}
 	}

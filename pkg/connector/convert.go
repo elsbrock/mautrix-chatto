@@ -28,10 +28,10 @@ var maxFileSize int64 = 100 << 20
 // the real Matrix account if that Chatto user is logged into the bridge,
 // otherwise their ghost.
 func (c *ChattoClient) matrixUserForChatto(ctx context.Context, chattoUserID string) id.UserID {
-	if ul := c.Main.Bridge.GetCachedUserLoginByID(chattoid.MakeUserLoginID(chattoUserID)); ul != nil {
+	if ul := c.Main.Bridge.GetCachedUserLoginByID(chattoid.MakeUserLoginID(c.serverID, chattoUserID)); ul != nil {
 		return ul.UserMXID
 	}
-	return c.Main.Bridge.Matrix.GhostIntent(chattoid.MakeUserID(chattoUserID)).GetMXID()
+	return c.Main.Bridge.Matrix.GhostIntent(c.ghostID(chattoUserID)).GetMXID()
 }
 
 func (c *ChattoClient) toMatrixOptions() *chattofmt.ToMatrixOptions {
@@ -70,12 +70,12 @@ func (c *ChattoClient) convertText(ctx context.Context, body string) *event.Mess
 func (c *ChattoClient) convertMessage(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *apiv1.Message) *bridgev2.ConvertedMessage {
 	cm := &bridgev2.ConvertedMessage{}
 	if root := msg.GetThreadRootEventId(); root != "" && root != msg.GetId() {
-		cm.ThreadRoot = ptr.Ptr(chattoid.MakeMessageID(root))
+		cm.ThreadRoot = ptr.Ptr(c.messageID(root))
 	}
 	if reply := msg.GetInReplyTo(); reply != "" && reply != msg.GetThreadRootEventId() {
-		cm.ReplyTo = &networkid.MessageOptionalPartID{MessageID: chattoid.MakeMessageID(reply)}
+		cm.ReplyTo = &networkid.MessageOptionalPartID{MessageID: c.messageID(reply)}
 	} else if reply != "" && cm.ThreadRoot == nil {
-		cm.ReplyTo = &networkid.MessageOptionalPartID{MessageID: chattoid.MakeMessageID(reply)}
+		cm.ReplyTo = &networkid.MessageOptionalPartID{MessageID: c.messageID(reply)}
 	}
 	if msg.GetDeletedAt() != nil {
 		cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{

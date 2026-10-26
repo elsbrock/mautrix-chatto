@@ -21,7 +21,7 @@ func TestArchivedRoomRefusesSends(t *testing.T) {
 	w.srv.ArchiveRoom(w.room.ID)
 	w.waitMessage(portal.MXID, "archived on Chatto")
 	w.eventually("archived metadata", func() bool {
-		p, _ := w.br.DB.Portal.GetByKey(w.ctx, chattoid.MakePortalKey(w.room.ID))
+		p, _ := w.br.DB.Portal.GetByKey(w.ctx, chattoid.MakePortalKey(testServer, w.room.ID))
 		return p.Metadata.(*chattoid.PortalMetadata).Archived
 	})
 	before := w.srv.CallCount("CreateMessage")
@@ -39,7 +39,7 @@ func TestThreadsDisabledBecomeReplies(t *testing.T) {
 	rootEvt := w.waitMessage(portal.MXID, "root message")
 	w.srv.SetThreadingMode(w.room.ID, apiv1.RoomThreadingMode_ROOM_THREADING_MODE_DISABLED)
 	w.eventually("threading mode metadata", func() bool {
-		p, _ := w.br.DB.Portal.GetByKey(w.ctx, chattoid.MakePortalKey(w.room.ID))
+		p, _ := w.br.DB.Portal.GetByKey(w.ctx, chattoid.MakePortalKey(testServer, w.room.ID))
 		return p.Metadata.(*chattoid.PortalMetadata).ThreadingMode == int32(apiv1.RoomThreadingMode_ROOM_THREADING_MODE_DISABLED)
 	})
 	w.sendMatrix(portal.MXID, aliceMXID, event.EventMessage, &event.MessageEventContent{
@@ -63,7 +63,7 @@ func TestRequiredThreadingPutsRepliesInThread(t *testing.T) {
 	root := w.srv.PostMessage(w.bob.ID, w.room.ID, "required root")
 	rootEvt := w.waitMessage(portal.MXID, "required root")
 	w.eventually("threading mode metadata", func() bool {
-		p, _ := w.br.DB.Portal.GetByKey(w.ctx, chattoid.MakePortalKey(w.room.ID))
+		p, _ := w.br.DB.Portal.GetByKey(w.ctx, chattoid.MakePortalKey(testServer, w.room.ID))
 		return p.Metadata.(*chattoid.PortalMetadata).ThreadingMode == int32(apiv1.RoomThreadingMode_ROOM_THREADING_MODE_REQUIRED)
 	})
 	w.sendMatrix(portal.MXID, aliceMXID, event.EventMessage, &event.MessageEventContent{
@@ -95,7 +95,7 @@ func TestInvitationNoticeAndAccept(t *testing.T) {
 	w := newWorld(t)
 	w.portal(w.room.ID)
 	other := w.srv.AddChannel("secret", "", w.bob.ID)
-	login := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(w.alice.ID))
+	login := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(testServer, w.alice.ID))
 	mgmt, err := login.User.GetManagementRoom(w.ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -113,7 +113,7 @@ func TestInvitationNoticeAndAccept(t *testing.T) {
 func TestSessionTerminatedReportsBadCredentials(t *testing.T) {
 	w := newWorld(t)
 	w.portal(w.room.ID)
-	login := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(w.alice.ID))
+	login := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(testServer, w.alice.ID))
 	w.srv.RevokeSessions(w.alice.ID)
 	w.srv.CloseRealtime(realtimev1.RealtimeCloseCode_REALTIME_CLOSE_CODE_SESSION_TERMINATED, false, 0)
 	w.eventually("bad credentials state", func() bool {
@@ -124,7 +124,7 @@ func TestSessionTerminatedReportsBadCredentials(t *testing.T) {
 func TestRevokedRefreshTokenReportsBadCredentials(t *testing.T) {
 	w := newWorld(t)
 	w.portal(w.room.ID)
-	login := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(w.alice.ID))
+	login := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(testServer, w.alice.ID))
 	w.srv.RevokeSessions(w.alice.ID)
 	w.srv.CloseRealtime(realtimev1.RealtimeCloseCode_REALTIME_CLOSE_CODE_AUTHENTICATION_REQUIRED, true, 0)
 	w.eventually("bad credentials state", func() bool {
@@ -160,7 +160,7 @@ func TestOverlongMessageIsRejected(t *testing.T) {
 func TestLogoutRevokesSession(t *testing.T) {
 	w := newWorld(t)
 	w.portal(w.room.ID)
-	login := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(w.alice.ID))
+	login := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(testServer, w.alice.ID))
 	sess := *login.Metadata.(*chattoid.UserLoginMetadata).Session
 	login.Logout(w.ctx)
 	if w.srv.CallCount("GetViewer") == 0 {
@@ -193,7 +193,7 @@ func TestChattoMentionOfUnbridgedUser(t *testing.T) {
 	w.srv.PostMessage(w.alice.ID, w.room.ID, "hey @bob and @all")
 	evt := w.waitMessage(portal.MXID, "hey")
 	content := evt.Message()
-	bobGhost := w.mx.FormatGhostMXID(chattoid.MakeUserID(w.bob.ID))
+	bobGhost := w.mx.FormatGhostMXID(chattoid.MakeUserID(testServer, w.bob.ID))
 	if content.Mentions == nil || !content.Mentions.Room || len(content.Mentions.UserIDs) != 1 || content.Mentions.UserIDs[0] != bobGhost {
 		t.Fatalf("mentions %+v", content.Mentions)
 	}
@@ -205,7 +205,7 @@ func TestChattoMentionOfUnbridgedUser(t *testing.T) {
 // newClientMust returns an unauthenticated client for the harness server.
 func (c *Connector) newClientMust(t *testing.T) *chattoclient.Client {
 	t.Helper()
-	client, err := c.newClient(nil)
+	client, err := c.newClient(c.server(testServer), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

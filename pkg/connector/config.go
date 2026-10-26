@@ -3,6 +3,7 @@ package connector
 import (
 	_ "embed"
 	"fmt"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -17,14 +18,15 @@ var ExampleConfig string
 
 // Config is the network section of the bridge config.
 type Config struct {
-	ServerURL           string `yaml:"server_url"`
-	DisplaynameTemplate string `yaml:"displayname_template"`
-	SyncPresence        bool   `yaml:"sync_presence"`
-	KeepLoginsOnline    bool   `yaml:"keep_logins_online"`
-	CallNotices         bool   `yaml:"call_notices"`
-	ThreadEcho          string `yaml:"thread_echo"`
-	AllowPasswordLogin  bool   `yaml:"allow_password_login"`
-	StrictServerVersion bool   `yaml:"strict_server_version"`
+	Servers             []ServerConfig `yaml:"servers"`
+	GroupSpaces         bool           `yaml:"group_spaces"`
+	DisplaynameTemplate string         `yaml:"displayname_template"`
+	SyncPresence        bool           `yaml:"sync_presence"`
+	KeepLoginsOnline    bool           `yaml:"keep_logins_online"`
+	CallNotices         bool           `yaml:"call_notices"`
+	ThreadEcho          string         `yaml:"thread_echo"`
+	AllowPasswordLogin  bool           `yaml:"allow_password_login"`
+	StrictServerVersion bool           `yaml:"strict_server_version"`
 
 	Metrics struct {
 		Enabled bool   `yaml:"enabled"`
@@ -39,6 +41,25 @@ type Config struct {
 
 	displaynameTemplate         *template.Template
 	ghostBotDisplaynameTemplate *template.Template
+}
+
+// ServerConfig is one Chatto server served by the bridge.
+type ServerConfig struct {
+	// ID is part of every network ID of the server and must never change.
+	ID  string `yaml:"id"`
+	URL string `yaml:"url"`
+}
+
+var serverIDPattern = regexp.MustCompile(`^[a-z0-9-]{1,16}$`)
+
+// Server returns the config of a server, or nil if it is not configured.
+func (c *Config) Server(id string) *ServerConfig {
+	for i := range c.Servers {
+		if c.Servers[i].ID == id {
+			return &c.Servers[i]
+		}
+	}
+	return nil
 }
 
 type umConfig Config
@@ -72,8 +93,21 @@ func (c *Config) PostProcess() error {
 
 // Validate checks the config for errors that would prevent the bridge from working.
 func (c *Config) Validate() error {
-	if _, err := chattoclient.ParseServerURL(c.ServerURL); err != nil {
-		return fmt.Errorf("network.server_url: %w", err)
+	if len(c.Servers) == 0 {
+		return fmt.Errorf("network.servers must list at least one Chatto server")
+	}
+	seen := make(map[string]bool, len(c.Servers))
+	for i, srv := range c.Servers {
+		if !serverIDPattern.MatchString(srv.ID) {
+			return fmt.Errorf("network.servers[%d].id must be 1-16 characters of a-z, 0-9 and -, not %q", i, srv.ID)
+		}
+		if seen[srv.ID] {
+			return fmt.Errorf("network.servers[%d].id %q is used twice", i, srv.ID)
+		}
+		seen[srv.ID] = true
+		if _, err := chattoclient.ParseServerURL(srv.URL); err != nil {
+			return fmt.Errorf("network.servers[%d].url: %w", i, err)
+		}
 	}
 	switch c.ThreadEcho {
 	case "", "skip", "notice":
@@ -135,7 +169,8 @@ func truncateRunes(s string, n int) string {
 }
 
 func upgradeConfig(helper up.Helper) {
-	helper.Copy(up.Str, "server_url")
+	helper.Copy(up.List, "servers")
+	helper.Copy(up.Bool, "group_spaces")
 	helper.Copy(up.Str, "displayname_template")
 	helper.Copy(up.Bool, "sync_presence")
 	helper.Copy(up.Bool, "keep_logins_online")

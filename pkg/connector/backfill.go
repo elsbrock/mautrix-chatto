@@ -20,14 +20,14 @@ import (
 const maxForwardPages = 20
 
 func (c *ChattoClient) FetchMessages(ctx context.Context, params bridgev2.FetchMessagesParams) (*bridgev2.FetchMessagesResponse, error) {
-	roomID, ok := chattoRoomID(params.Portal)
+	roomID, ok := c.chattoRoomID(params.Portal)
 	if !ok {
 		// Spaces have no timeline.
 		return &bridgev2.FetchMessagesResponse{HasMore: false}, nil
 	}
 	var err error
 	limit := int32(min(max(params.Count, 1), 500))
-	threadRoot := chattoid.ParseMessageID(params.ThreadRoot)
+	threadRoot := c.eventID(params.ThreadRoot)
 	pager := &timelinePager{c: c, roomID: roomID, threadRoot: threadRoot, limit: limit}
 
 	var events []*apiv1.RoomTimelineEvent
@@ -62,7 +62,7 @@ func (c *ChattoClient) FetchMessages(ctx context.Context, params bridgev2.FetchM
 				events = page.GetEvents()
 			}
 		case params.AnchorMessage != nil:
-			anchorID := chattoid.ParseMessageID(params.AnchorMessage.ID)
+			anchorID := c.eventID(params.AnchorMessage.ID)
 			page, err = pager.around(ctx, anchorID)
 			if err == nil {
 				events = eventsBefore(page.GetEvents(), anchorID)
@@ -281,7 +281,7 @@ func (c *ChattoClient) backfillMessage(ctx context.Context, portal *bridgev2.Por
 	bm := &bridgev2.BackfillMessage{
 		ConvertedMessage: c.convertMessage(ctx, portal, intent, msg),
 		Sender:           c.makeEventSender(msg.GetActorId()),
-		ID:               chattoid.MakeMessageID(msg.GetId()),
+		ID:               c.messageID(msg.GetId()),
 		Timestamp:        msg.GetCreatedAt().AsTime(),
 		Reactions:        c.backfillReactions(ctx, roomID, msg),
 	}

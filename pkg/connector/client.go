@@ -27,8 +27,12 @@ type ChattoClient struct {
 	tokens chattoclient.TokenSource
 	rt     *chattoclient.Realtime
 
-	userID string
-	users  *userCache
+	// serverID is the server part of the login ID. srv is nil when that
+	// server is no longer configured.
+	serverID string
+	srv      *server
+	userID   string
+	users    *userCache
 
 	stopLock sync.Mutex
 	stop     context.CancelFunc
@@ -62,12 +66,44 @@ var (
 )
 
 func newChattoClient(main *Connector, login *bridgev2.UserLogin) *ChattoClient {
+	serverID, userID := chattoid.ParseUserLoginID(login.ID)
 	return &ChattoClient{
 		Main:      main,
 		UserLogin: login,
-		userID:    chattoid.ParseUserLoginID(login.ID),
+		serverID:  serverID,
+		srv:       main.server(serverID),
+		userID:    userID,
 		typing:    make(map[networkid.PortalID]context.CancelFunc),
 	}
+}
+
+// ghostID returns the ghost ID of a user on this login's server.
+func (c *ChattoClient) ghostID(chattoUserID string) networkid.UserID {
+	return chattoid.MakeUserID(c.serverID, chattoUserID)
+}
+
+// portalKey returns the portal key of a room on this login's server.
+func (c *ChattoClient) portalKey(roomID string) networkid.PortalKey {
+	return chattoid.MakePortalKey(c.serverID, roomID)
+}
+
+// messageID returns the message ID of an event on this login's server.
+func (c *ChattoClient) messageID(eventID string) networkid.MessageID {
+	return chattoid.MakeMessageID(c.serverID, eventID)
+}
+
+// chattoUserID returns the Chatto user ID of a ghost, if it is on this
+// login's server.
+func (c *ChattoClient) chattoUserID(id networkid.UserID) (string, bool) {
+	srv, userID := chattoid.ParseUserID(id)
+	return userID, srv == c.serverID && userID != ""
+}
+
+// chattoEventID returns the Chatto event ID of a message, if it is on this
+// login's server.
+func (c *ChattoClient) chattoEventID(id networkid.MessageID) (string, bool) {
+	srv, eventID := chattoid.ParseMessageID(id)
+	return eventID, srv == c.serverID && eventID != ""
 }
 
 func (c *ChattoClient) meta() *chattoid.UserLoginMetadata {
@@ -78,11 +114,12 @@ func (c *ChattoClient) meta() *chattoid.UserLoginMetadata {
 func (c *ChattoClient) API() *chattoclient.Client { return c.api }
 
 func (c *ChattoClient) GetUserID() networkid.UserID {
-	return chattoid.MakeUserID(c.userID)
+	return c.ghostID(c.userID)
 }
 
 func (c *ChattoClient) IsThisUser(_ context.Context, userID networkid.UserID) bool {
-	return chattoid.ParseUserID(userID) == c.userID
+	id, ok := c.chattoUserID(userID)
+	return ok && id == c.userID
 }
 
 func (c *ChattoClient) IsLoggedIn() bool {
@@ -107,6 +144,28 @@ func (c *ChattoClient) isBot() bool {
 
 func (c *ChattoClient) Connect(ctx context.Context) {
 	log := zerolog.Ctx(ctx)
+	if c.srv == nil {
+		c.sendState(status.BridgeState{
+			StateEvent: status.StateUnknownError,
+			Error:      "chatto-server-not-configured",
+			Message:    fmt.Sprintf("The Chatto server %q is no longer configured on this bridge; log out or ask the bridge admin to add it back", c.serverID),
+		})
+		return
+	}
+	if version, _ := c.srv.serverVersion(); version == "" {
+		// The server was unreachable when the bridge started.
+		if err := c.Main.checkServerVersion(ctx, c.srv); err != nil {
+			log.Warn().Err(err).Msg("Failed to fetch Chatto server version")
+		}
+	}
+	if _, tooOld := c.srv.serverVersion(); tooOld {
+		c.sendState(status.BridgeState{
+			StateEvent: status.StateUnknownError,
+			Error:      "chatto-server-too-old",
+			Message:    fmt.Sprintf("The Chatto server %q is older than %s, which this bridge requires", c.serverID, chattoclient.UpstreamVersion),
+		})
+		return
+	}
 	if c.api == nil {
 		c.sendState(status.BridgeState{
 			StateEvent: status.StateBadCredentials,
@@ -129,6 +188,7 @@ func (c *ChattoClient) Connect(ctx context.Context) {
 	} else if profile := viewer.Msg.GetUser().GetProfile(); profile != nil {
 		c.updateRemoteProfile(ctx, profile)
 	}
+	c.refreshServerSpace(ctx)
 
 	runCtx, cancel := context.WithCancel(c.UserLogin.Log.WithContext(c.Main.Bridge.BackgroundCtx))
 	c.stopLock.Lock()
@@ -265,4 +325,14 @@ func isAuthError(err error) bool {
 func (c *ChattoClient) sendState(state status.BridgeState) {
 	c.Main.recordLoginState(c.UserLogin.ID, state.StateEvent)
 	c.UserLogin.BridgeState.Send(state)
+}
+
+// refreshServerSpace updates the server space's name, topic and avatar, so a
+// space created while the server profile was unavailable gets fixed up.
+func (c *ChattoClient) refreshServerSpace(ctx context.Context) {
+	portal, err := c.Main.Bridge.GetExistingPortalByKey(ctx, networkid.PortalKey{ID: chattoid.MakeServerPortalID(c.serverID)})
+	if err != nil || portal == nil || portal.MXID == "" {
+		return
+	}
+	portal.UpdateInfo(ctx, c.getServerInfo(ctx), c.UserLogin, nil, time.Time{})
 }

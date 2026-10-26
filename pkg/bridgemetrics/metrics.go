@@ -14,20 +14,20 @@ const namespace = "mautrix_chatto"
 var Registry = prometheus.NewRegistry()
 
 var (
-	// RPCDuration observes ConnectRPC call latency by procedure and result code.
+	// RPCDuration observes ConnectRPC call latency by server, procedure and result code.
 	RPCDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: namespace,
 		Name:      "rpc_duration_seconds",
 		Help:      "Latency of ConnectRPC calls to Chatto.",
 		Buckets:   []float64{.01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10},
-	}, []string{"procedure", "code"})
+	}, []string{"server", "procedure", "code"})
 
-	// RPCErrors counts failed ConnectRPC calls by procedure and code.
+	// RPCErrors counts failed ConnectRPC calls by server, procedure and code.
 	RPCErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Name:      "rpc_errors_total",
 		Help:      "Failed ConnectRPC calls to Chatto.",
-	}, []string{"procedure", "code"})
+	}, []string{"server", "procedure", "code"})
 
 	// RealtimeConnected is 1 while a login's realtime socket is subscribed.
 	RealtimeConnected = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -41,21 +41,21 @@ var (
 		Namespace: namespace,
 		Name:      "realtime_reconnects_total",
 		Help:      "Realtime WebSocket reconnects by reason.",
-	}, []string{"reason"})
+	}, []string{"server", "reason"})
 
 	// RealtimeRecoveries counts how each subscription reached live delivery.
 	RealtimeRecoveries = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Name:      "realtime_recoveries_total",
 		Help:      "Realtime subscription recoveries by result (resumed, snapshot, live_only).",
-	}, []string{"result"})
+	}, []string{"server", "result"})
 
 	// RealtimeEvents counts received realtime events by type.
 	RealtimeEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Name:      "realtime_events_total",
 		Help:      "Realtime events received from Chatto by type.",
-	}, []string{"type"})
+	}, []string{"server", "type"})
 
 	// RealtimeEventLag observes the delay between an event's creation on
 	// Chatto and its arrival at the bridge.
@@ -94,12 +94,12 @@ var (
 		Help:      "Number of Chatto logins by bridge state event.",
 	}, []string{"state"})
 
-	// ServerInfo exposes the Chatto server version as a label.
+	// ServerInfo exposes each Chatto server's version as a label.
 	ServerInfo = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
 		Name:      "chatto_server_info",
 		Help:      "Chatto server version seen by the bridge (value is always 1).",
-	}, []string{"version", "supported"})
+	}, []string{"server", "version", "supported"})
 
 	// BuildInfo exposes the bridge version.
 	BuildInfo = prometheus.NewGaugeVec(prometheus.GaugeOpts{

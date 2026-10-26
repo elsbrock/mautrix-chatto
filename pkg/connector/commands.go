@@ -1,6 +1,7 @@
 package connector
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -35,7 +36,7 @@ var cmdGrantBotPermissions = &commands.FullHandler{
 		Section: commands.HelpSectionAuth,
 		Description: "Grant a Chatto bot account the permissions the bridge needs, using your (human) login. " +
 			"Run inside a portal to scope the grant to that room and add the bot to it.",
-		Args: "<_bot login or ID_> [server|room <_room ID_>|group <_group ID_>] [--revoke]",
+		Args: "<_bot login or ID_> [server|room <_room ID_>|group <_group ID_>] [--server <_server_>] [--revoke]",
 	},
 	RequiresLogin: true,
 }
@@ -46,7 +47,7 @@ var cmdAcceptInvite = &commands.FullHandler{
 	Help: commands.HelpMeta{
 		Section:     commands.HelpSectionChats,
 		Description: "Accept a Chatto room invitation",
-		Args:        "<_invitation ID_>",
+		Args:        "<_invitation ID_> [--server <_server_>]",
 	},
 	RequiresLogin: true,
 }
@@ -56,31 +57,78 @@ var cmdServerInfo = &commands.FullHandler{
 	Name: "chatto-server",
 	Help: commands.HelpMeta{
 		Section:     commands.HelpSectionGeneral,
-		Description: "Show the Chatto server this bridge talks to and its version",
+		Description: "Show the Chatto servers this bridge talks to and their versions",
 	},
 }
 
-func humanLogin(ce *commands.Event) (*bridgev2.UserLogin, *ChattoClient) {
+// humanLogin returns the user's first connected human login on a server.
+func humanLogin(ce *commands.Event, serverID string) (*bridgev2.UserLogin, *ChattoClient) {
 	for _, login := range ce.User.GetUserLogins() {
 		cc, ok := login.Client.(*ChattoClient)
-		if ok && cc.api != nil && !cc.isBot() {
+		if ok && cc.api != nil && !cc.isBot() && cc.serverID == serverID {
 			return login, cc
 		}
 	}
 	return nil, nil
 }
 
+// commandServer picks the server a command acts on: an explicit --server,
+// the portal's server, a server matched by match, or the only server the
+// user is logged into. It returns the remaining arguments.
+func commandServer(ce *commands.Event, args []string, match func(cc *ChattoClient) bool) (string, []string, error) {
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == "--server" {
+			rest := append(append([]string(nil), args[:i]...), args[i+2:]...)
+			return args[i+1], rest, nil
+		}
+	}
+	if ce.Portal != nil {
+		if srv, _, _ := chattoid.ParsePortalID(ce.Portal.ID); srv != "" {
+			return srv, args, nil
+		}
+	}
+	servers := map[string]bool{}
+	var matched []string
+	for _, login := range ce.User.GetUserLogins() {
+		cc, ok := login.Client.(*ChattoClient)
+		if !ok {
+			continue
+		}
+		servers[cc.serverID] = true
+		if match != nil && match(cc) {
+			matched = append(matched, cc.serverID)
+		}
+	}
+	if len(matched) == 1 {
+		return matched[0], args, nil
+	}
+	if len(servers) == 1 {
+		for srv := range servers {
+			return srv, args, nil
+		}
+	}
+	return "", args, errors.New("you are logged into several Chatto servers; add `--server <server>` to choose one")
+}
+
 func fnGrantBotPermissions(ce *commands.Event) {
 	if len(ce.Args) < 1 {
-		ce.Reply("Usage: `grant-bot-permissions <bot login or ID> [server|room <room ID>|group <group ID>] [--revoke]`")
+		ce.Reply("Usage: `grant-bot-permissions <bot login or ID> [server|room <room ID>|group <group ID>] [--server <server>] [--revoke]`")
 		return
 	}
-	_, cc := humanLogin(ce)
+	botArg := ce.Args[0]
+	serverID, args, err := commandServer(ce, ce.Args, func(cc *ChattoClient) bool {
+		// The bot is usually a bridge login itself, which names its server.
+		return cc.isBot() && (cc.userID == botArg || strings.EqualFold(cc.meta().Login, botArg))
+	})
+	if err != nil {
+		ce.Reply("%v", err)
+		return
+	}
+	_, cc := humanLogin(ce, serverID)
 	if cc == nil {
-		ce.Reply("You need to be logged in with a human Chatto account that owns the bot.")
+		ce.Reply("You need to be logged in on %s with a human Chatto account that owns the bot.", serverID)
 		return
 	}
-	args := ce.Args
 	revoke := false
 	if args[len(args)-1] == "--revoke" {
 		revoke = true
@@ -107,7 +155,7 @@ func fnGrantBotPermissions(ce *commands.Event) {
 		scopeName = "room group " + args[2]
 	case len(args) >= 2 && args[1] == "server":
 	case ce.Portal != nil:
-		if roomID, _ := chattoid.ParsePortalID(ce.Portal.ID); roomID != "" {
+		if _, roomID := chattoid.ParseRoomPortalID(ce.Portal.ID); roomID != "" {
 			scope = &adminv1.PermissionScope{Kind: adminv1.PermissionScopeKind_PERMISSION_SCOPE_KIND_ROOM, Id: roomID}
 			scopeName, roomToJoin = "this room", roomID
 		}
@@ -150,16 +198,20 @@ func fnGrantBotPermissions(ce *commands.Event) {
 }
 
 func fnAcceptInvite(ce *commands.Event) {
-	if len(ce.Args) < 1 {
-		ce.Reply("Usage: `accept-invite <invitation ID>`")
+	serverID, args, err := commandServer(ce, ce.Args, nil)
+	if len(args) < 1 {
+		ce.Reply("Usage: `accept-invite <invitation ID> [--server <server>]`")
+		return
+	} else if err != nil {
+		ce.Reply("%v", err)
 		return
 	}
-	_, cc := humanLogin(ce)
+	_, cc := humanLogin(ce, serverID)
 	if cc == nil {
-		ce.Reply("Invitations can only be accepted by human Chatto accounts.")
+		ce.Reply("Invitations can only be accepted by human Chatto accounts on %s.", serverID)
 		return
 	}
-	_, err := cc.api.RoomInvitations.AcceptRoomInvitation(ce.Ctx, connect.NewRequest(&apiv1.AcceptRoomInvitationRequest{InvitationId: ce.Args[0]}))
+	_, err = cc.api.RoomInvitations.AcceptRoomInvitation(ce.Ctx, connect.NewRequest(&apiv1.AcceptRoomInvitationRequest{InvitationId: args[0]}))
 	if err != nil {
 		ce.Reply("Failed to accept invitation: %v", err)
 		return
@@ -175,10 +227,16 @@ func fnServerInfo(ce *commands.Event) {
 	if !ok {
 		return
 	}
-	version := c.serverVersion
-	if version == "" {
-		version = "unknown"
+	var sb strings.Builder
+	for _, id := range c.serverIDs() {
+		srv := c.server(id)
+		version, tooOld := srv.serverVersion()
+		if version == "" {
+			version = "unknown"
+		} else if tooOld {
+			version += " (too old, refused)"
+		}
+		fmt.Fprintf(&sb, "* %s: %s, version %s\n", srv.ID, srv.URL, version)
 	}
-	ce.Reply("Chatto server: %s\nServer version: %s\nBridge API version: %s",
-		c.Config.ServerURL, version, chattoclient.UpstreamVersion)
+	ce.Reply("Chatto servers:\n%s\nBridge API version: %s", sb.String(), chattoclient.UpstreamVersion)
 }

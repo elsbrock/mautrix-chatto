@@ -12,11 +12,12 @@ import (
 // Chatto can deliver message_posted over the WebSocket before CreateMessage
 // returns, i.e. before the ID is known or saved. While a send to a room is in
 // flight, echoes from our own account in that room wait for it to finish and
-// are then checked against the IDs the sends returned.
+// are then checked against the IDs the sends returned. Rooms and messages are
+// keyed by their server-prefixed network IDs, so servers never mix.
 type echoTracker struct {
 	mu       sync.Mutex
-	inflight map[string]int           // room ID → sends in flight
-	done     map[string]chan struct{} // room ID → closed when inflight drops to 0
+	inflight map[string]int           // portal ID → sends in flight
+	done     map[string]chan struct{} // portal ID → closed when inflight drops to 0
 	sent     map[string]time.Time     // message ID → when it was sent
 	// WaitTimeout bounds how long an echo waits for in-flight sends.
 	WaitTimeout time.Duration

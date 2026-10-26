@@ -15,6 +15,7 @@ import (
 
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/bridgemetrics"
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/admin/v1/adminv1connect"
+	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1/apiv1connect"
 	discoveryv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/discovery/v1"
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/discovery/v1/discoveryv1connect"
@@ -34,6 +35,7 @@ type Client struct {
 	userAgent string
 	tokens    TokenSource
 	now       func() time.Time
+	server    string
 
 	Discovery        discoveryv1connect.ServerDiscoveryServiceClient
 	Viewer           apiv1connect.ViewerServiceClient
@@ -61,6 +63,8 @@ type Options struct {
 	Tokens TokenSource
 	// Now overrides the clock, for tests.
 	Now func() time.Time
+	// Server labels the client's metrics with the configured server ID.
+	Server string
 }
 
 // New creates a client for the server at baseURL.
@@ -75,6 +79,7 @@ func New(baseURL string, opts Options) (*Client, error) {
 		userAgent: opts.UserAgent,
 		tokens:    opts.Tokens,
 		now:       opts.Now,
+		server:    opts.Server,
 	}
 	if c.http == nil {
 		c.http = &http.Client{Timeout: 2 * time.Minute}
@@ -108,7 +113,7 @@ func New(baseURL string, opts Options) (*Client, error) {
 
 // WithTokens returns a copy of c that authenticates with tokens.
 func (c *Client) WithTokens(tokens TokenSource) *Client {
-	clone, _ := New(c.base.String(), Options{HTTPClient: c.http, UserAgent: c.userAgent, Tokens: tokens, Now: c.now})
+	clone, _ := New(c.base.String(), Options{HTTPClient: c.http, UserAgent: c.userAgent, Tokens: tokens, Now: c.now, Server: c.server})
 	return clone
 }
 
@@ -162,11 +167,20 @@ func (c *Client) ResolveURL(raw string) string {
 
 // ServerVersion returns the version reported by the server's public profile.
 func (c *Client) ServerVersion(ctx context.Context) (string, error) {
-	resp, err := c.Discovery.GetServer(ctx, connect.NewRequest(&discoveryv1.GetServerRequest{}))
+	profile, err := c.ServerProfile(ctx)
 	if err != nil {
 		return "", err
 	}
-	return resp.Msg.GetProfile().GetVersion(), nil
+	return profile.GetVersion(), nil
+}
+
+// ServerProfile returns the server's public profile. It needs no login.
+func (c *Client) ServerProfile(ctx context.Context) (*apiv1.ServerPublicProfile, error) {
+	resp, err := c.Discovery.GetServer(ctx, connect.NewRequest(&discoveryv1.GetServerRequest{}))
+	if err != nil {
+		return nil, err
+	}
+	return resp.Msg.GetProfile(), nil
 }
 
 // tokenError maps a TokenSource failure to a connect error. Only a revoked
@@ -211,9 +225,9 @@ func (i *interceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 		code := "ok"
 		if err != nil {
 			code = connect.CodeOf(err).String()
-			bridgemetrics.RPCErrors.WithLabelValues(req.Spec().Procedure, code).Inc()
+			bridgemetrics.RPCErrors.WithLabelValues(i.client.server, req.Spec().Procedure, code).Inc()
 		}
-		bridgemetrics.RPCDuration.WithLabelValues(req.Spec().Procedure, code).Observe(time.Since(start).Seconds())
+		bridgemetrics.RPCDuration.WithLabelValues(i.client.server, req.Spec().Procedure, code).Observe(time.Since(start).Seconds())
 		return resp, err
 	}
 }

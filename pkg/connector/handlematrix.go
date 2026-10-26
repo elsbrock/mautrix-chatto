@@ -44,26 +44,43 @@ var (
 				WithErrorAsMessage().WithIsCertain(true).WithSendNotice(false)
 	ErrRoomArchived = bridgev2.WrapErrorInStatus(errors.New("this room is archived on Chatto")).
 			WithErrorAsMessage().WithIsCertain(true).WithSendNotice(true)
+	// ErrServerMismatch is returned when bridgev2 picks a login (relay,
+	// default login) from another Chatto server than the room's.
+	ErrServerMismatch = bridgev2.WrapErrorInStatus(errServerMismatch).
+				WithErrorAsMessage().WithIsCertain(true).WithSendNotice(true)
 )
 
 // isChattoMessageID reports whether a message exists on Chatto, as opposed
 // to bridge-generated notices (call, archive) that only exist on Matrix.
 func isChattoMessageID(id networkid.MessageID) bool {
-	return !strings.HasPrefix(string(id), noticeIDPrefix)
+	return !chattoid.IsNoticeMessageID(id)
 }
 
-func portalRoomID(portal *bridgev2.Portal) (string, error) {
-	roomID, ok := chattoRoomID(portal)
-	if !ok {
+// portalRoomID returns the Chatto room of a portal this login may act on.
+// Spaces have no room, and rooms of other servers are refused.
+func (c *ChattoClient) portalRoomID(portal *bridgev2.Portal) (string, error) {
+	srv, kind, roomID := chattoid.ParsePortalID(portal.ID)
+	switch {
+	case kind != chattoid.PortalRoom:
 		return "", ErrGroupPortal
+	case srv != c.serverID:
+		return "", ErrServerMismatch
 	}
 	return roomID, nil
 }
 
-// chattoRoomID returns the Chatto room of a portal; spaces have none.
-func chattoRoomID(portal *bridgev2.Portal) (string, bool) {
-	roomID, groupID := chattoid.ParsePortalID(portal.ID)
-	return roomID, groupID == "" && roomID != ""
+// chattoRoomID is portalRoomID for callers that ignore spaces and foreign
+// rooms silently.
+func (c *ChattoClient) chattoRoomID(portal *bridgev2.Portal) (string, bool) {
+	roomID, err := c.portalRoomID(portal)
+	return roomID, err == nil
+}
+
+// eventID returns the Chatto event ID of a message on this login's server,
+// or "" for notices and other servers' messages.
+func (c *ChattoClient) eventID(id networkid.MessageID) string {
+	eventID, _ := c.chattoEventID(id)
+	return eventID
 }
 
 func portalMeta(portal *bridgev2.Portal) *chattoid.PortalMetadata {
@@ -84,11 +101,17 @@ func (c *ChattoClient) fromMatrixOptions() *chattofmt.FromMatrixOptions {
 			if err != nil || msg == nil {
 				return "", false
 			}
-			chattoRoom, _ := chattoid.ParsePortalID(msg.Room.ID)
-			if chattoRoom == "" {
+			srvID, chattoRoom := chattoid.ParseRoomPortalID(msg.Room.ID)
+			_, chattoEvent := chattoid.ParseMessageID(msg.ID)
+			srv := c.Main.server(srvID)
+			if srv == nil || chattoRoom == "" || chattoEvent == "" {
 				return "", false
 			}
-			return fmt.Sprintf("%s/chat/-/%s/m/%s", c.api.BaseURL(), chattoRoom, chattoid.ParseMessageID(msg.ID)), true
+			base, err := chattoclient.ParseServerURL(srv.URL)
+			if err != nil {
+				return "", false
+			}
+			return fmt.Sprintf("%s/chat/-/%s/m/%s", base, chattoRoom, chattoEvent), true
 		},
 	}
 }
@@ -97,7 +120,11 @@ func (c *ChattoClient) fromMatrixOptions() *chattofmt.FromMatrixOptions {
 // to their Chatto user, real users to the Chatto account they logged in with.
 func (c *ChattoClient) chattoLoginForMatrixUser(ctx context.Context, userID id.UserID) (string, bool) {
 	if ghostID, ok := c.Main.Bridge.Matrix.ParseGhostMXID(userID); ok {
-		user, err := c.users.Get(ctx, chattoid.ParseUserID(ghostID))
+		chattoUserID, ok := c.chattoUserID(ghostID)
+		if !ok {
+			return "", false
+		}
+		user, err := c.users.Get(ctx, chattoUserID)
 		if err != nil {
 			return "", false
 		}
@@ -108,6 +135,9 @@ func (c *ChattoClient) chattoLoginForMatrixUser(ctx context.Context, userID id.U
 		return "", false
 	}
 	for _, login := range user.GetUserLogins() {
+		if srv, _ := chattoid.ParseUserLoginID(login.ID); srv != c.serverID {
+			continue
+		}
 		if meta, ok := login.Metadata.(*chattoid.UserLoginMetadata); ok && meta.Login != "" {
 			return meta.Login, true
 		}
@@ -133,7 +163,7 @@ func (c *ChattoClient) matrixToChattoBody(ctx context.Context, content *event.Me
 }
 
 func (c *ChattoClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.MatrixMessage) (*bridgev2.MatrixMessageResponse, error) {
-	roomID, err := portalRoomID(msg.Portal)
+	roomID, err := c.portalRoomID(msg.Portal)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +178,7 @@ func (c *ChattoClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.Ma
 	threadsAllowed := meta.Kind == portalKindChannel &&
 		meta.ThreadingMode != int32(apiv1.RoomThreadingMode_ROOM_THREADING_MODE_DISABLED)
 	if msg.ThreadRoot != nil {
-		rootID := chattoid.ParseMessageID(msg.ThreadRoot.ID)
+		rootID := c.eventID(msg.ThreadRoot.ID)
 		if threadsAllowed {
 			req.ThreadRootEventId = rootID
 		} else {
@@ -156,7 +186,7 @@ func (c *ChattoClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.Ma
 		}
 	}
 	if msg.ReplyTo != nil && isChattoMessageID(msg.ReplyTo.ID) {
-		replyID := chattoid.ParseMessageID(msg.ReplyTo.ID)
+		replyID := c.eventID(msg.ReplyTo.ID)
 		// In a REQUIRED-threading room, replying to a root means replying in its thread.
 		if threadsAllowed && req.ThreadRootEventId == "" && msg.ReplyTo.ThreadRoot == "" &&
 			meta.ThreadingMode == int32(apiv1.RoomThreadingMode_ROOM_THREADING_MODE_REQUIRED) {
@@ -212,7 +242,7 @@ func (c *ChattoClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.Ma
 		return nil, ErrMessageTooLong
 	}
 
-	finish := c.Main.echoes.Begin(roomID)
+	finish := c.Main.echoes.Begin(string(c.portalKey(roomID).ID))
 	resp, err := api.Messages.CreateMessage(ctx, connect.NewRequest(req))
 	if err != nil {
 		finish("")
@@ -220,11 +250,11 @@ func (c *ChattoClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.Ma
 		return nil, wrapSendError(err)
 	}
 	created := resp.Msg.GetMessage()
-	finish(created.GetId())
+	finish(string(c.messageID(created.GetId())))
 	bridgemetrics.MessagesBridged.WithLabelValues("to_chatto", msgType).Inc()
 	dbMsg := &database.Message{
-		ID:        chattoid.MakeMessageID(created.GetId()),
-		SenderID:  chattoid.MakeUserID(senderID),
+		ID:        c.messageID(created.GetId()),
+		SenderID:  c.ghostID(senderID),
 		Timestamp: created.GetCreatedAt().AsTime(),
 		Metadata:  &chattoid.MessageMetadata{TextHash: chattoid.HashText(req.Body)},
 	}
@@ -236,7 +266,7 @@ func (c *ChattoClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.Ma
 		dbMsg.Metadata = &chattoid.MessageMetadata{AssetID: created.GetAttachments()[0].GetId()}
 	}
 	if created.GetThreadRootEventId() != "" && created.GetThreadRootEventId() != created.GetId() {
-		dbMsg.ThreadRoot = chattoid.MakeMessageID(created.GetThreadRootEventId())
+		dbMsg.ThreadRoot = c.messageID(created.GetThreadRootEventId())
 	}
 	return &bridgev2.MatrixMessageResponse{DB: dbMsg}, nil
 }
@@ -280,7 +310,7 @@ func wrapSendError(err error) error {
 }
 
 func (c *ChattoClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.MatrixEdit) error {
-	roomID, err := portalRoomID(msg.Portal)
+	roomID, err := c.portalRoomID(msg.Portal)
 	if err != nil {
 		return err
 	}
@@ -295,7 +325,7 @@ func (c *ChattoClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Matri
 	}
 	_, err = api.Messages.UpdateMessage(ctx, connect.NewRequest(&apiv1.UpdateMessageRequest{
 		RoomId:     roomID,
-		EventId:    chattoid.ParseMessageID(msg.EditTarget.ID),
+		EventId:    c.eventID(msg.EditTarget.ID),
 		Body:       &body,
 		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"body"}},
 	}))
@@ -313,12 +343,12 @@ func (c *ChattoClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Matri
 }
 
 func (c *ChattoClient) HandleMatrixMessageRemove(ctx context.Context, msg *bridgev2.MatrixMessageRemove) error {
-	roomID, err := portalRoomID(msg.Portal)
+	roomID, err := c.portalRoomID(msg.Portal)
 	if err != nil {
 		return err
 	}
 	api := c.apiForMessage(ctx, msg.TargetMessage)
-	eventID := chattoid.ParseMessageID(msg.TargetMessage.ID)
+	eventID := c.eventID(msg.TargetMessage.ID)
 	if attID, isAttachment := chattoid.ParseAttachmentPartID(msg.TargetMessage.PartID); isAttachment {
 		// Redacting one attachment of a multi-part message removes just it.
 		parts, err := c.Main.Bridge.DB.Message.GetAllPartsByID(ctx, msg.Portal.Receiver, msg.TargetMessage.ID)
@@ -351,7 +381,7 @@ func (c *ChattoClient) PreHandleMatrixReaction(ctx context.Context, msg *bridgev
 		return bridgev2.MatrixReactionPreResponse{}, ErrUnsupportedReaction
 	}
 	return bridgev2.MatrixReactionPreResponse{
-		SenderID:     chattoid.MakeUserID(c.userID),
+		SenderID:     c.ghostID(c.userID),
 		EmojiID:      chattoid.MakeEmojiID(shortcode),
 		Emoji:        emoji.FromShortcode(shortcode),
 		MaxReactions: 20,
@@ -359,13 +389,13 @@ func (c *ChattoClient) PreHandleMatrixReaction(ctx context.Context, msg *bridgev
 }
 
 func (c *ChattoClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (*database.Reaction, error) {
-	roomID, err := portalRoomID(msg.Portal)
+	roomID, err := c.portalRoomID(msg.Portal)
 	if err != nil {
 		return nil, err
 	}
 	_, err = c.api.Messages.AddReaction(ctx, connect.NewRequest(&apiv1.AddReactionRequest{
 		RoomId:         roomID,
-		MessageEventId: chattoid.ParseMessageID(msg.TargetMessage.ID),
+		MessageEventId: c.eventID(msg.TargetMessage.ID),
 		Emoji:          string(msg.PreHandleResp.EmojiID),
 	}))
 	if err != nil {
@@ -377,13 +407,13 @@ func (c *ChattoClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2.M
 }
 
 func (c *ChattoClient) HandleMatrixReactionRemove(ctx context.Context, msg *bridgev2.MatrixReactionRemove) error {
-	roomID, err := portalRoomID(msg.Portal)
+	roomID, err := c.portalRoomID(msg.Portal)
 	if err != nil {
 		return err
 	}
 	_, err = c.api.Messages.RemoveReaction(ctx, connect.NewRequest(&apiv1.RemoveReactionRequest{
 		RoomId:         roomID,
-		MessageEventId: chattoid.ParseMessageID(msg.TargetReaction.MessageID),
+		MessageEventId: c.eventID(msg.TargetReaction.MessageID),
 		Emoji:          string(msg.TargetReaction.EmojiID),
 	}))
 	if err != nil {
@@ -395,7 +425,7 @@ func (c *ChattoClient) HandleMatrixReactionRemove(ctx context.Context, msg *brid
 }
 
 func (c *ChattoClient) HandleMatrixReadReceipt(ctx context.Context, receipt *bridgev2.MatrixReadReceipt) error {
-	roomID, ok := chattoRoomID(receipt.Portal)
+	roomID, ok := c.chattoRoomID(receipt.Portal)
 	if !ok {
 		return nil
 	}
@@ -404,14 +434,14 @@ func (c *ChattoClient) HandleMatrixReadReceipt(ctx context.Context, receipt *bri
 	if target != nil && target.ThreadRoot != "" {
 		_, err = c.api.Threads.MarkThreadAsRead(ctx, connect.NewRequest(&apiv1.MarkThreadAsReadRequest{
 			RoomId:            roomID,
-			ThreadRootEventId: chattoid.ParseMessageID(target.ThreadRoot),
-			UpToEventId:       chattoid.ParseMessageID(target.ID),
+			ThreadRootEventId: c.eventID(target.ThreadRoot),
+			UpToEventId:       c.eventID(target.ID),
 		}))
 		return err
 	}
 	req := &apiv1.MarkRoomAsReadRequest{RoomId: roomID}
 	if target != nil && isChattoMessageID(target.ID) {
-		req.UpToEventId = chattoid.ParseMessageID(target.ID)
+		req.UpToEventId = c.eventID(target.ID)
 	}
 	_, err = c.api.Rooms.MarkRoomAsRead(ctx, connect.NewRequest(req))
 	if req.UpToEventId != "" && (connect.CodeOf(err) == connect.CodeInvalidArgument || connect.CodeOf(err) == connect.CodeNotFound) {
@@ -429,7 +459,7 @@ const typingRefreshInterval = 2 * time.Second
 const maxTypingDuration = 2 * time.Minute
 
 func (c *ChattoClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.MatrixTyping) error {
-	roomID, ok := chattoRoomID(msg.Portal)
+	roomID, ok := c.chattoRoomID(msg.Portal)
 	if !ok {
 		return nil
 	}
@@ -465,7 +495,7 @@ func (c *ChattoClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.Mat
 }
 
 func (c *ChattoClient) HandleMatrixRoomName(ctx context.Context, msg *bridgev2.MatrixRoomName) (bool, error) {
-	roomID, ok := chattoRoomID(msg.Portal)
+	roomID, ok := c.chattoRoomID(msg.Portal)
 	if !ok || portalMeta(msg.Portal).Kind != portalKindChannel {
 		return false, nil
 	}
@@ -485,7 +515,7 @@ func (c *ChattoClient) HandleMatrixRoomName(ctx context.Context, msg *bridgev2.M
 }
 
 func (c *ChattoClient) HandleMatrixRoomTopic(ctx context.Context, msg *bridgev2.MatrixRoomTopic) (bool, error) {
-	roomID, ok := chattoRoomID(msg.Portal)
+	roomID, ok := c.chattoRoomID(msg.Portal)
 	if !ok || portalMeta(msg.Portal).Kind != portalKindChannel {
 		return false, nil
 	}
@@ -505,7 +535,7 @@ func (c *ChattoClient) HandleMatrixRoomTopic(ctx context.Context, msg *bridgev2.
 }
 
 func (c *ChattoClient) HandleMatrixMembership(ctx context.Context, msg *bridgev2.MatrixMembershipChange) (*bridgev2.MatrixMembershipResult, error) {
-	roomID, err := portalRoomID(msg.Portal)
+	roomID, err := c.portalRoomID(msg.Portal)
 	if err != nil {
 		return nil, err
 	}
@@ -519,7 +549,7 @@ func (c *ChattoClient) HandleMatrixMembership(ctx context.Context, msg *bridgev2
 		_, err = c.api.Rooms.LeaveRoom(ctx, connect.NewRequest(&apiv1.LeaveRoomRequest{RoomId: roomID}))
 		return nil, wrapSendError(err)
 	case bridgev2.Invite:
-		targetID, ok := membershipTargetUserID(msg.Target)
+		targetID, ok := c.membershipTargetUserID(msg.Target)
 		if !ok || meta.Kind != portalKindChannel {
 			return nil, errors.New("only Chatto users can be invited to Chatto channels")
 		}
@@ -529,7 +559,7 @@ func (c *ChattoClient) HandleMatrixMembership(ctx context.Context, msg *bridgev2
 		}
 		return &bridgev2.MatrixMembershipResult{}, nil
 	case bridgev2.Kick:
-		targetID, ok := membershipTargetUserID(msg.Target)
+		targetID, ok := c.membershipTargetUserID(msg.Target)
 		if !ok || meta.Kind != portalKindChannel {
 			return nil, nil
 		}
@@ -539,12 +569,15 @@ func (c *ChattoClient) HandleMatrixMembership(ctx context.Context, msg *bridgev2
 	return nil, nil
 }
 
-func membershipTargetUserID(target bridgev2.GhostOrUserLogin) (string, bool) {
+// membershipTargetUserID returns the Chatto user of a membership target on
+// this login's server.
+func (c *ChattoClient) membershipTargetUserID(target bridgev2.GhostOrUserLogin) (string, bool) {
 	switch t := target.(type) {
 	case *bridgev2.Ghost:
-		return chattoid.ParseUserID(t.ID), true
+		return c.chattoUserID(t.ID)
 	case *bridgev2.UserLogin:
-		return chattoid.ParseUserLoginID(t.ID), true
+		srv, userID := chattoid.ParseUserLoginID(t.ID)
+		return userID, srv == c.serverID && userID != ""
 	}
 	return "", false
 }
@@ -553,7 +586,7 @@ func membershipTargetUserID(target bridgev2.GhostOrUserLogin) (string, bool) {
 // message: the ghost bot that sent it, or this login.
 func (c *ChattoClient) apiForMessage(ctx context.Context, msg *database.Message) *chattoclient.Client {
 	if msg != nil {
-		if bot := c.Main.ghostBotForMessage(ctx, chattoid.ParseUserID(msg.SenderID)); bot != nil {
+		if bot := c.Main.ghostBotForMessage(ctx, msg.SenderID); bot != nil {
 			return c.ghostBotClient(bot)
 		}
 	}

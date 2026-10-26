@@ -118,6 +118,8 @@ type Server struct {
 	HeartbeatInterval time.Duration
 	// MaxUploadSize is reported in the runtime config.
 	MaxUploadSize int64
+	// Name is the server name in the public profile ("Fake Chatto" if empty).
+	Name string
 	// MaxChunkSize is announced for uploads.
 	MaxChunkSize int32
 	// DirectLogin enables password login.

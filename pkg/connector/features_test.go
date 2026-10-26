@@ -104,9 +104,9 @@ func TestMatrixMediaTooLarge(t *testing.T) {
 	portal := w.portal(w.room.ID)
 	w.srv.MaxUploadSize = 4
 	// Portal creation already cached the server's default limit.
-	w.conn.uploadLimit.mu.Lock()
-	w.conn.uploadLimit.size = 0
-	w.conn.uploadLimit.mu.Unlock()
+	w.conn.server(testServer).uploadLimit.mu.Lock()
+	w.conn.server(testServer).uploadLimit.size = 0
+	w.conn.server(testServer).uploadLimit.mu.Unlock()
 	uri, _, _ := w.mx.BotIntent().UploadMedia(w.ctx, "", []byte("too large"), "big.bin", "application/octet-stream")
 	w.sendMatrix(portal.MXID, aliceMXID, event.EventMessage, &event.MessageEventContent{
 		MsgType: event.MsgFile, Body: "big.bin", FileName: "big.bin", URL: uri,
@@ -121,7 +121,7 @@ func TestTypingBothWays(t *testing.T) {
 	w := newWorld(t)
 	portal := w.portal(w.room.ID)
 	w.srv.PublishTyping(w.bob.ID, w.room.ID)
-	bobGhost := w.mx.FormatGhostMXID(chattoid.MakeUserID(w.bob.ID))
+	bobGhost := w.mx.FormatGhostMXID(chattoid.MakeUserID(testServer, w.bob.ID))
 	w.eventually("typing on matrix", func() bool {
 		w.mx.mu.Lock()
 		defer w.mx.mu.Unlock()
@@ -183,8 +183,8 @@ func TestDMPortal(t *testing.T) {
 	h.login(aliceMXID, "alice", "pw")
 	portal := h.portal(dm.ID)
 	h.eventually("DM portal metadata", func() bool {
-		p, _ := h.br.DB.Portal.GetByKey(h.ctx, chattoid.MakePortalKey(dm.ID))
-		return p.RoomType == database.RoomTypeDM && p.OtherUserID == chattoid.MakeUserID(bob.ID)
+		p, _ := h.br.DB.Portal.GetByKey(h.ctx, chattoid.MakePortalKey(testServer, dm.ID))
+		return p.RoomType == database.RoomTypeDM && p.OtherUserID == chattoid.MakeUserID(testServer, bob.ID)
 	})
 	h.srv.PostMessage(bob.ID, dm.ID, "psst")
 	h.waitMessage(portal.MXID, "psst")
@@ -199,38 +199,19 @@ func TestGroupDMPortal(t *testing.T) {
 	h.login(aliceMXID, "alice", "pw")
 	h.portal(dm.ID)
 	h.eventually("group DM portal type", func() bool {
-		p, _ := h.br.DB.Portal.GetByKey(h.ctx, chattoid.MakePortalKey(dm.ID))
+		p, _ := h.br.DB.Portal.GetByKey(h.ctx, chattoid.MakePortalKey(testServer, dm.ID))
 		return p.RoomType == database.RoomTypeGroupDM
-	})
-}
-
-func TestRoomGroupBecomesSpace(t *testing.T) {
-	h := newHarness(t)
-	alice := h.srv.AddUser("alice", "Alice", "pw")
-	group := h.srv.AddGroup("Engineering")
-	room := h.srv.AddChannel("backend", group.ID, alice.ID)
-	h.login(aliceMXID, "alice", "pw")
-	portal := h.portal(room.ID)
-	space := h.portalByID(chattoidGroupKey(group.ID))
-	h.eventually("space portal metadata", func() bool {
-		p, _ := h.br.DB.Portal.GetByKey(h.ctx, chattoidGroupKey(group.ID))
-		return p.RoomType == database.RoomTypeSpace && p.Name == "Engineering"
-	})
-	h.eventually("space child", func() bool {
-		return len(h.mx.Events(func(e *sentEvent) bool {
-			return e.Type == event.StateSpaceChild && e.RoomID == space.MXID && e.StateKey != nil && *e.StateKey == string(portal.MXID)
-		})) > 0
 	})
 }
 
 func TestStartDMFromMatrix(t *testing.T) {
 	w := newWorld(t)
-	login := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(w.alice.ID))
+	login := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(testServer, w.alice.ID))
 	resp, err := login.Client.(*ChattoClient).ResolveIdentifier(w.ctx, "@bob", true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.UserID != chattoid.MakeUserID(w.bob.ID) || resp.Chat == nil || resp.Chat.PortalKey.ID == "" {
+	if resp.UserID != chattoid.MakeUserID(testServer, w.bob.ID) || resp.Chat == nil || resp.Chat.PortalKey.ID == "" {
 		t.Fatalf("resolve response %+v", resp)
 	}
 	unknown, err := login.Client.(*ChattoClient).ResolveIdentifier(w.ctx, "nobody", false)
@@ -244,7 +225,7 @@ func TestMembershipChanges(t *testing.T) {
 	portal := w.portal(w.room.ID)
 	carol := w.srv.AddUser("carol", "Carol", "pw")
 	w.srv.AddMember(w.room.ID, carol.ID)
-	carolGhost := w.mx.FormatGhostMXID(chattoid.MakeUserID(carol.ID))
+	carolGhost := w.mx.FormatGhostMXID(chattoid.MakeUserID(testServer, carol.ID))
 	w.eventually("carol joined", func() bool {
 		w.mx.mu.Lock()
 		defer w.mx.mu.Unlock()
@@ -270,7 +251,7 @@ func TestPresenceSync(t *testing.T) {
 	w.srv.Publish("", w.bob.ID, &realtimev1.RealtimeEvent{Event: &realtimev1.RealtimeEvent_PresenceChanged{
 		PresenceChanged: &realtimev1.PresenceChangedEvent{Status: apiv1.PresenceStatus_PRESENCE_STATUS_AWAY},
 	}})
-	bobGhost := w.mx.FormatGhostMXID(chattoid.MakeUserID(w.bob.ID))
+	bobGhost := w.mx.FormatGhostMXID(chattoid.MakeUserID(testServer, w.bob.ID))
 	w.eventually("presence", func() bool {
 		w.mx.mu.Lock()
 		defer w.mx.mu.Unlock()
@@ -337,7 +318,7 @@ func TestTokenLoginWithBotKey(t *testing.T) {
 	}
 	ul := step.CompleteParams.UserLogin
 	meta := ul.Metadata.(*chattoid.UserLoginMetadata)
-	if !meta.IsBot || meta.Kind != chattoid.CredentialBotKey || ul.ID != chattoid.MakeUserLoginID(bot.ID) {
+	if !meta.IsBot || meta.Kind != chattoid.CredentialBotKey || ul.ID != chattoid.MakeUserLoginID(testServer, bot.ID) {
 		t.Fatalf("bot login metadata %+v", meta)
 	}
 	portal := h.portal(room.ID)
@@ -427,7 +408,7 @@ func TestGrantBotPermissionsCommand(t *testing.T) {
 }
 
 func chattoidGroupKey(groupID string) networkid.PortalKey {
-	return networkid.PortalKey{ID: chattoid.MakeGroupPortalID(groupID)}
+	return networkid.PortalKey{ID: chattoid.MakeGroupPortalID(testServer, groupID)}
 }
 
 func isRespError(err error, want bridgev2.RespError) bool {

@@ -9,7 +9,6 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
-	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
 	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
 )
 
@@ -21,7 +20,7 @@ const maxPins = 100
 // Pins of messages that were never bridged are skipped.
 func (c *ChattoClient) syncPins(ctx context.Context, roomID string) {
 	log := zerolog.Ctx(ctx).With().Str("room_id", roomID).Logger()
-	portal, err := c.Main.Bridge.DB.Portal.GetByKey(ctx, chattoid.MakePortalKey(roomID))
+	portal, err := c.Main.Bridge.DB.Portal.GetByKey(ctx, c.portalKey(roomID))
 	if err != nil || portal == nil || portal.MXID == "" {
 		return
 	}
@@ -35,7 +34,7 @@ func (c *ChattoClient) syncPins(ctx context.Context, roomID string) {
 	}
 	pinned := make([]id.EventID, 0, len(resp.Msg.GetPinnedMessages()))
 	for _, pm := range resp.Msg.GetPinnedMessages() {
-		msg, err := c.Main.Bridge.DB.Message.GetFirstPartByID(ctx, "", chattoid.MakeMessageID(pm.GetMessage().GetId()))
+		msg, err := c.Main.Bridge.DB.Message.GetFirstPartByID(ctx, "", c.messageID(pm.GetMessage().GetId()))
 		if err != nil || msg == nil {
 			continue
 		}

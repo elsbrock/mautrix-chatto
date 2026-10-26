@@ -3,8 +3,6 @@ package connector
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -21,7 +19,7 @@ import (
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
 )
 
-// Connector is the bridgev2 NetworkConnector for one Chatto server.
+// Connector is the bridgev2 NetworkConnector for the configured Chatto servers.
 type Connector struct {
 	Bridge *bridgev2.Bridge
 	Config Config
@@ -31,9 +29,9 @@ type Connector struct {
 	// Version is the bridge version, used in the user agent.
 	Version string
 
-	serverVersion string
+	serversLock   sync.Mutex
+	servers       map[string]*server
 	metricsServer *http.Server
-	uploadLimit   uploadLimit
 	// echoes is shared by all logins: any login's realtime stream may see
 	// a message another login (or a ghost bot) is still sending.
 	echoes    *echoTracker
@@ -110,12 +108,13 @@ func (c *Connector) userAgent() string {
 	return "mautrix-chatto/" + c.Version
 }
 
-// newClient creates an API client for this connector's server.
-func (c *Connector) newClient(tokens chattoclient.TokenSource) (*chattoclient.Client, error) {
-	return chattoclient.New(c.Config.ServerURL, chattoclient.Options{
+// newClient creates an API client for a server.
+func (c *Connector) newClient(srv *server, tokens chattoclient.TokenSource) (*chattoclient.Client, error) {
+	return chattoclient.New(srv.URL, chattoclient.Options{
 		HTTPClient: c.HTTPClient,
 		UserAgent:  c.userAgent(),
 		Tokens:     tokens,
+		Server:     srv.ID,
 	})
 }
 
@@ -130,26 +129,10 @@ func (c *Connector) Start(ctx context.Context) error {
 			return err
 		}
 	}
-	client, err := c.newClient(nil)
-	if err != nil {
-		return err
-	}
-	version, err := client.ServerVersion(ctx)
-	if err != nil {
-		// The server may be down temporarily; logins will retry on their own.
-		log.Warn().Err(err).Msg("Failed to fetch Chatto server version")
-	} else {
-		c.serverVersion = version
-		supported := CheckServerVersion(version)
-		bridgemetrics.ServerInfo.WithLabelValues(version, fmt.Sprint(supported)).Set(1)
-		if !supported {
-			msg := fmt.Sprintf("Chatto server version %s is older than %s, which this bridge was built against", version, chattoclient.UpstreamVersion)
-			if c.Config.StrictServerVersion {
-				return errors.New(msg)
-			}
-			log.Warn().Str("server_version", version).Msg(msg)
-		} else {
-			log.Info().Str("server_version", version).Msg("Connected to Chatto server")
+	for _, id := range c.serverIDs() {
+		if err := c.checkServerVersion(ctx, c.server(id)); err != nil {
+			// The server may be down temporarily; logins will retry on their own.
+			log.Warn().Err(err).Str("server", id).Msg("Failed to fetch Chatto server version")
 		}
 	}
 	c.registerOAuthRoutes()
@@ -210,7 +193,8 @@ func (c *Connector) SetMaxFileSize(maxSize int64) {
 }
 
 func (c *Connector) ValidateUserID(id networkid.UserID) bool {
-	return validChattoID(string(id), 'U')
+	srv, userID := chattoid.ParseUserID(id)
+	return c.server(srv) != nil && validChattoID(userID, 'U')
 }
 
 // validChattoID reports whether s looks like a Chatto NanoID with the given

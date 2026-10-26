@@ -22,6 +22,8 @@ type UserLoginMetadata struct {
 	BotKey  string                `json:"bot_key,omitempty"`
 	Login   string                `json:"login"`
 	IsBot   bool                  `json:"is_bot,omitempty"`
+	// Server is the configured server ID, also part of the login ID.
+	Server string `json:"server,omitempty"`
 	// RealtimeCursor is the last safe realtime resume cursor. Cursors expire
 	// after 15 minutes, so it only helps across quick restarts.
 	RealtimeCursor string `json:"realtime_cursor,omitempty"`
@@ -35,7 +37,7 @@ type GhostMetadata struct {
 
 // PortalMetadata is stored with each portal.
 type PortalMetadata struct {
-	Kind          string `json:"kind,omitempty"` // channel, dm, group
+	Kind          string `json:"kind,omitempty"` // channel, dm, group_dm, space, server
 	ThreadingMode int32  `json:"threading_mode,omitempty"`
 	Universal     bool   `json:"universal,omitempty"`
 	Archived      bool   `json:"archived,omitempty"`

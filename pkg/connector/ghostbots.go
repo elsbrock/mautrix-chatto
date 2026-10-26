@@ -16,9 +16,11 @@ import (
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/id"
 
 	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoclient"
+	"github.com/elsbrock/matrix-chatto-bridge/pkg/chattoid"
 	adminv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/admin/v1"
 	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
 )
@@ -30,6 +32,8 @@ type ghostBot struct {
 	Login  string `json:"login"`
 	APIKey string `json:"api_key"`
 	Owner  string `json:"owner"`
+	// Server is the configured ID of the bot's Chatto server.
+	Server string `json:"server"`
 	// Rooms the bot was already added to and granted permissions in.
 	Rooms []string `json:"rooms,omitempty"`
 	// DisplayName is the name the bot was last given.
@@ -51,7 +55,7 @@ func (b *ghostBot) inRoom(roomID string) bool {
 type ghostBots struct {
 	mu        sync.Mutex
 	byKey     map[ghostBotID]*ghostBot
-	byUser    map[string]ghostBotID // Chatto user ID → key
+	byUser    map[networkid.UserID]ghostBotID // bot's ghost ID → key
 	userLocks map[ghostBotID]*sync.Mutex
 	failures  map[ghostBotID]time.Time
 	loaded    bool
@@ -61,8 +65,8 @@ type ghostBots struct {
 // because only a bot's owner can grant it permissions in rooms.
 type ghostBotID string
 
-func makeGhostBotID(owner string, mxid id.UserID) ghostBotID {
-	return ghostBotID(owner + "|" + string(mxid))
+func makeGhostBotID(owner networkid.UserLoginID, mxid id.UserID) ghostBotID {
+	return ghostBotID(string(owner) + "|" + string(mxid))
 }
 
 // ghostBotRetryAfter is how long creation is not retried after a failure.
@@ -116,7 +120,7 @@ func (c *Connector) loadGhostBotsLocked(ctx context.Context) {
 		return
 	}
 	gb.byKey = make(map[ghostBotID]*ghostBot)
-	gb.byUser = make(map[string]ghostBotID)
+	gb.byUser = make(map[networkid.UserID]ghostBotID)
 	gb.failures = make(map[ghostBotID]time.Time)
 	var index []ghostBotID
 	if raw := c.Bridge.DB.KV.Get(ctx, ghostBotIndexKey); raw != "" {
@@ -126,7 +130,7 @@ func (c *Connector) loadGhostBotsLocked(ctx context.Context) {
 		var bot ghostBot
 		if raw := c.Bridge.DB.KV.Get(ctx, ghostBotKVKey(key)); raw != "" && json.Unmarshal([]byte(raw), &bot) == nil {
 			gb.byKey[key] = &bot
-			gb.byUser[bot.UserID] = key
+			gb.byUser[bot.ghostID()] = key
 		}
 	}
 	gb.loaded = true
@@ -137,7 +141,7 @@ func (c *Connector) saveGhostBotLocked(ctx context.Context, key ghostBotID, bot 
 	stored := *bot
 	stored.Rooms = append([]string(nil), bot.Rooms...)
 	gb.byKey[key] = &stored
-	gb.byUser[bot.UserID] = key
+	gb.byUser[bot.ghostID()] = key
 	data, _ := json.Marshal(&stored)
 	c.Bridge.DB.KV.Set(ctx, ghostBotKVKey(key), string(data))
 	index := make([]ghostBotID, 0, len(gb.byKey))
@@ -148,16 +152,21 @@ func (c *Connector) saveGhostBotLocked(ctx context.Context, key ghostBotID, bot 
 	c.Bridge.DB.KV.Set(ctx, ghostBotIndexKey, string(indexData))
 }
 
+// ghostID returns the ghost ID the bot's Chatto account would have.
+func (b *ghostBot) ghostID() networkid.UserID {
+	return chattoid.MakeUserID(b.Server, b.UserID)
+}
+
 // IsGhostBot reports whether a Chatto user is a ghost bot made by the bridge.
 // Such users represent Matrix users and must not get ghosts of their own.
-func (c *Connector) IsGhostBot(ctx context.Context, chattoUserID string) bool {
+func (c *Connector) IsGhostBot(ctx context.Context, ghostID networkid.UserID) bool {
 	if !c.Config.GhostBots.Enabled {
 		return false
 	}
 	c.ghostBots.mu.Lock()
 	defer c.ghostBots.mu.Unlock()
 	c.loadGhostBotsLocked(ctx)
-	_, ok := c.ghostBots.byUser[chattoUserID]
+	_, ok := c.ghostBots.byUser[ghostID]
 	return ok
 }
 
@@ -209,7 +218,7 @@ func (c *ChattoClient) ensureGhostBot(ctx context.Context, sender *bridgev2.Orig
 		return nil, errGhostBotsUnavailable
 	}
 	main := c.Main
-	key := makeGhostBotID(c.userID, sender.UserID)
+	key := makeGhostBotID(c.UserLogin.ID, sender.UserID)
 	unlock := main.ghostBots.lockUser(key)
 	defer unlock()
 	bot := main.getGhostBot(ctx, key)
@@ -269,7 +278,7 @@ func (c *ChattoClient) ghostBotClient(bot *ghostBot) *chattoclient.Client {
 
 // ghostBotForMessage returns the ghost bot that sent a bridged message, if
 // the message was sent through one.
-func (c *Connector) ghostBotForMessage(ctx context.Context, senderID string) *ghostBot {
+func (c *Connector) ghostBotForMessage(ctx context.Context, senderID networkid.UserID) *ghostBot {
 	if !c.Config.GhostBots.Enabled {
 		return nil
 	}
@@ -300,7 +309,7 @@ func (c *ChattoClient) createGhostBot(ctx context.Context, mxid id.UserID, name 
 		}
 		return &ghostBot{
 			UserID: resp.Msg.GetBot().GetUser().GetId(), Login: login,
-			APIKey: resp.Msg.GetApiKey(), Owner: c.userID, DisplayName: name,
+			APIKey: resp.Msg.GetApiKey(), Owner: c.userID, Server: c.serverID, DisplayName: name,
 		}, nil
 	}
 	return nil, fmt.Errorf("failed to create ghost bot, all logins taken: %w", lastErr)

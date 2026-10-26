@@ -28,10 +28,11 @@ import (
 const (
 	LoginFlowOAuth = "oauth"
 
-	oauthMetadataPath = "/chatto/oauth/client.json"
-	oauthCallbackPath = "/chatto/oauth/callback"
-	loginStepOAuth    = "run.chatto.login.oauth"
-	oauthLoginTimeout = 10 * time.Minute
+	oauthMetadataPath    = "/chatto/oauth/client.json"
+	oauthCallbackPath    = "/chatto/oauth/callback"
+	loginStepOAuth       = "run.chatto.login.oauth"
+	loginStepOAuthServer = "run.chatto.login.oauth.server"
+	oauthLoginTimeout    = 10 * time.Minute
 )
 
 var (
@@ -186,12 +187,16 @@ func (c *Connector) finishOAuth(state string, res oauthResult) bool {
 type OAuthLogin struct {
 	User     *bridgev2.User
 	Main     *Connector
+	srv      *server
 	state    string
 	verifier string
 	result   chan oauthResult
 }
 
-var _ bridgev2.LoginProcessDisplayAndWait = (*OAuthLogin)(nil)
+var (
+	_ bridgev2.LoginProcessDisplayAndWait = (*OAuthLogin)(nil)
+	_ bridgev2.LoginProcessUserInput      = (*OAuthLogin)(nil)
+)
 
 func randomToken(n int) string {
 	b := make([]byte, n)
@@ -214,11 +219,38 @@ func (o *OAuthLogin) AuthorizeURL() string {
 		"code_challenge":        {pkceChallenge(o.verifier)},
 		"code_challenge_method": {"S256"},
 	}
-	base, _ := chattoclient.ParseServerURL(o.Main.Config.ServerURL)
+	base, _ := chattoclient.ParseServerURL(o.srv.URL)
 	return base.String() + "/oauth/authorize?" + q.Encode()
 }
 
+// Start asks for the server first when several are configured.
 func (o *OAuthLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
+	if fields := o.Main.serverFields(); len(fields) > 0 {
+		return &bridgev2.LoginStep{
+			Type:            bridgev2.LoginStepTypeUserInput,
+			StepID:          loginStepOAuthServer,
+			Instructions:    "Choose the Chatto server to sign in to",
+			UserInputParams: &bridgev2.LoginUserInputParams{Fields: fields},
+		}, nil
+	}
+	srv, err := o.Main.loginServer(nil)
+	if err != nil {
+		return nil, err
+	}
+	return o.begin(srv)
+}
+
+func (o *OAuthLogin) SubmitUserInput(ctx context.Context, input map[string]string) (*bridgev2.LoginStep, error) {
+	srv, err := o.Main.loginServer(input)
+	if err != nil {
+		return nil, err
+	}
+	return o.begin(srv)
+}
+
+// begin registers the pending authorization and shows the link.
+func (o *OAuthLogin) begin(srv *server) (*bridgev2.LoginStep, error) {
+	o.srv = srv
 	o.state = randomToken(24)
 	o.verifier = randomToken(48)
 	o.result = make(chan oauthResult, 1)
@@ -254,7 +286,7 @@ func (o *OAuthLogin) Wait(ctx context.Context) (*bridgev2.LoginStep, error) {
 	if res.err != nil {
 		return nil, ErrOAuthDenied
 	}
-	client, err := o.Main.newClient(nil)
+	client, err := o.Main.newClient(o.srv, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +294,7 @@ func (o *OAuthLogin) Wait(ctx context.Context) (*bridgev2.LoginStep, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange authorization code: %w", err)
 	}
-	return o.Main.finishLogin(ctx, o.User, &chattoid.UserLoginMetadata{Kind: chattoid.CredentialSession, Session: sess})
+	return o.Main.finishLogin(ctx, o.User, o.srv, &chattoid.UserLoginMetadata{Kind: chattoid.CredentialSession, Session: sess})
 }
 
 func (o *OAuthLogin) Cancel() {

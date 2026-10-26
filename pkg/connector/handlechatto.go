@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"connectrpc.com/connect"
@@ -22,9 +23,6 @@ import (
 	apiv1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/api/v1"
 	realtimev1 "github.com/elsbrock/matrix-chatto-bridge/pkg/chattopb/chatto/realtime/v1"
 )
-
-// noticeIDPrefix marks message IDs of bridge-generated notices.
-const noticeIDPrefix = "notice:"
 
 // typingTimeout matches Chatto's receiver-side typing expiry.
 const typingTimeout = 6 * time.Second
@@ -127,7 +125,7 @@ func (c *ChattoClient) queueChatResync(ctx context.Context, rws *apiv1.RoomWithV
 	evt := &simplevent.ChatResync{
 		EventMeta: simplevent.EventMeta{
 			Type:         bridgev2.RemoteEventChatResync,
-			PortalKey:    chattoid.MakePortalKey(room.GetId()),
+			PortalKey:    c.portalKey(room.GetId()),
 			CreatePortal: true,
 			LogContext: func(lc zerolog.Context) zerolog.Context {
 				return lc.Str("room_id", room.GetId())
@@ -203,7 +201,7 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 	meta := func(t bridgev2.RemoteEventType, roomID string) simplevent.EventMeta {
 		return simplevent.EventMeta{
 			Type:      t,
-			PortalKey: chattoid.MakePortalKey(roomID),
+			PortalKey: c.portalKey(roomID),
 			Sender:    c.makeEventSender(actor),
 			Timestamp: ts,
 			LogContext: func(lc zerolog.Context) zerolog.Context {
@@ -225,13 +223,13 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 	case *realtimev1.RealtimeEvent_MessageRetracted:
 		c.UserLogin.QueueRemoteEvent(&simplevent.MessageRemove{
 			EventMeta:     meta(bridgev2.RemoteEventMessageRemove, e.MessageRetracted.GetRoomId()),
-			TargetMessage: chattoid.MakeMessageID(e.MessageRetracted.GetMessageEventId()),
+			TargetMessage: c.messageID(e.MessageRetracted.GetMessageEventId()),
 		})
 		bridgemetrics.MessagesBridged.WithLabelValues("to_matrix", "redaction").Inc()
 	case *realtimev1.RealtimeEvent_ReactionAdded:
 		c.UserLogin.QueueRemoteEvent(&simplevent.Reaction{
 			EventMeta:     meta(bridgev2.RemoteEventReaction, e.ReactionAdded.GetRoomId()),
-			TargetMessage: chattoid.MakeMessageID(e.ReactionAdded.GetMessageEventId()),
+			TargetMessage: c.messageID(e.ReactionAdded.GetMessageEventId()),
 			EmojiID:       chattoid.MakeEmojiID(e.ReactionAdded.GetEmoji()),
 			Emoji:         emojiFromShortcode(e.ReactionAdded.GetEmoji()),
 		})
@@ -239,7 +237,7 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 	case *realtimev1.RealtimeEvent_ReactionRemoved:
 		c.UserLogin.QueueRemoteEvent(&simplevent.Reaction{
 			EventMeta:     meta(bridgev2.RemoteEventReactionRemove, e.ReactionRemoved.GetRoomId()),
-			TargetMessage: chattoid.MakeMessageID(e.ReactionRemoved.GetMessageEventId()),
+			TargetMessage: c.messageID(e.ReactionRemoved.GetMessageEventId()),
 			EmojiID:       chattoid.MakeEmojiID(e.ReactionRemoved.GetEmoji()),
 		})
 		bridgemetrics.MessagesBridged.WithLabelValues("to_matrix", "reaction_remove").Inc()
@@ -292,7 +290,7 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 			c.resyncRoom(ctx, roomID, true)
 			return nil
 		}
-		if c.Main.IsGhostBot(ctx, actor) {
+		if c.Main.IsGhostBot(ctx, c.ghostID(actor)) {
 			return nil
 		}
 		c.UserLogin.QueueRemoteEvent(&simplevent.ChatInfoChange{
@@ -310,7 +308,7 @@ func (c *ChattoClient) HandleEvent(ctx context.Context, evt *realtimev1.Realtime
 			})
 			return nil
 		}
-		if c.Main.IsGhostBot(ctx, actor) {
+		if c.Main.IsGhostBot(ctx, c.ghostID(actor)) {
 			return nil
 		}
 		member := c.makeMember(actor)
@@ -350,10 +348,10 @@ func (c *ChattoClient) mayBeBridgeSend(ctx context.Context, actor string) bool {
 	if actor == c.userID {
 		return true
 	}
-	if c.Main.Bridge.GetCachedUserLoginByID(chattoid.MakeUserLoginID(actor)) != nil {
+	if c.Main.Bridge.GetCachedUserLoginByID(chattoid.MakeUserLoginID(c.serverID, actor)) != nil {
 		return true
 	}
-	return c.Main.IsGhostBot(ctx, actor)
+	return c.Main.IsGhostBot(ctx, c.ghostID(actor))
 }
 
 func (c *ChattoClient) handleMessagePosted(ctx context.Context, evt *realtimev1.RealtimeEvent, posted *realtimev1.MessagePostedEvent) error {
@@ -362,7 +360,7 @@ func (c *ChattoClient) handleMessagePosted(ctx context.Context, evt *realtimev1.
 		c.handleThreadEcho(ctx, evt, posted)
 		return nil
 	}
-	if c.mayBeBridgeSend(ctx, evt.GetActorId()) && c.Main.echoes.IsEcho(ctx, roomID, evt.GetId()) {
+	if c.mayBeBridgeSend(ctx, evt.GetActorId()) && c.Main.echoes.IsEcho(ctx, string(c.portalKey(roomID).ID), string(c.messageID(evt.GetId()))) {
 		zerolog.Ctx(ctx).Debug().Msg("Ignoring echo of message sent by the bridge")
 		return nil
 	}
@@ -383,7 +381,7 @@ func (c *ChattoClient) handleMessagePosted(ctx context.Context, evt *realtimev1.
 	c.UserLogin.QueueRemoteEvent(&simplevent.Message[*apiv1.Message]{
 		EventMeta: simplevent.EventMeta{
 			Type:         bridgev2.RemoteEventMessage,
-			PortalKey:    chattoid.MakePortalKey(roomID),
+			PortalKey:    c.portalKey(roomID),
 			Sender:       c.makeEventSender(msg.GetActorId()),
 			Timestamp:    msg.GetCreatedAt().AsTime(),
 			CreatePortal: true,
@@ -392,7 +390,7 @@ func (c *ChattoClient) handleMessagePosted(ctx context.Context, evt *realtimev1.
 			},
 		},
 		Data:               msg,
-		ID:                 chattoid.MakeMessageID(msg.GetId()),
+		ID:                 c.messageID(msg.GetId()),
 		ConvertMessageFunc: c.convertMessageFunc,
 	})
 	bridgemetrics.MessagesBridged.WithLabelValues("to_matrix", "message").Inc()
@@ -416,15 +414,15 @@ func (c *ChattoClient) handleThreadEcho(ctx context.Context, evt *realtimev1.Rea
 	c.UserLogin.QueueRemoteEvent(&simplevent.Message[string]{
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventMessage,
-			PortalKey: chattoid.MakePortalKey(posted.GetRoomId()),
+			PortalKey: c.portalKey(posted.GetRoomId()),
 			Sender:    c.makeEventSender(evt.GetActorId()),
 			Timestamp: evt.GetCreatedAt().AsTime(),
 		},
-		ID:   chattoid.MakeMessageID(evt.GetId()),
+		ID:   c.messageID(evt.GetId()),
 		Data: posted.GetEchoOfEventId(),
 		ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, target string) (*bridgev2.ConvertedMessage, error) {
 			return &bridgev2.ConvertedMessage{
-				ReplyTo: &networkid.MessageOptionalPartID{MessageID: chattoid.MakeMessageID(target)},
+				ReplyTo: &networkid.MessageOptionalPartID{MessageID: c.messageID(target)},
 				Parts: []*bridgev2.ConvertedMessagePart{{
 					Type:    event.EventMessage,
 					Content: &event.MessageEventContent{MsgType: event.MsgNotice, Body: "↪ replied in a thread"},
@@ -459,13 +457,13 @@ func (c *ChattoClient) handleMessageChanged(ctx context.Context, evt *realtimev1
 	c.UserLogin.QueueRemoteEvent(&simplevent.Message[*apiv1.Message]{
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventEdit,
-			PortalKey: chattoid.MakePortalKey(roomID),
+			PortalKey: c.portalKey(roomID),
 			Sender:    c.makeEventSender(msg.GetActorId()),
 			Timestamp: ts,
 		},
 		Data:            msg,
-		ID:              chattoid.MakeMessageID(msg.GetId()),
-		TargetMessage:   chattoid.MakeMessageID(msg.GetId()),
+		ID:              c.messageID(msg.GetId()),
+		TargetMessage:   c.messageID(msg.GetId()),
 		ConvertEditFunc: c.convertEditFunc,
 	})
 	bridgemetrics.MessagesBridged.WithLabelValues("to_matrix", "edit").Inc()
@@ -496,11 +494,11 @@ func (c *ChattoClient) sendRoomNotice(ctx context.Context, roomID, actor string,
 	c.UserLogin.QueueRemoteEvent(&simplevent.Message[string]{
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventMessage,
-			PortalKey: chattoid.MakePortalKey(roomID),
+			PortalKey: c.portalKey(roomID),
 			Sender:    sender,
 			Timestamp: ts,
 		},
-		ID:   networkid.MessageID(fmt.Sprintf("%s%s:%d", noticeIDPrefix, roomID, ts.UnixNano())),
+		ID:   chattoid.MakeNoticeMessageID(c.serverID, roomID, strconv.FormatInt(ts.UnixNano(), 10)),
 		Data: text,
 		ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, text string) (*bridgev2.ConvertedMessage, error) {
 			return &bridgev2.ConvertedMessage{Parts: []*bridgev2.ConvertedMessagePart{{
@@ -530,11 +528,11 @@ func (c *ChattoClient) handleOwnReadState(ctx context.Context, roomID string, ts
 	c.UserLogin.QueueRemoteEvent(&simplevent.Receipt{
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventReadReceipt,
-			PortalKey: chattoid.MakePortalKey(roomID),
+			PortalKey: c.portalKey(roomID),
 			Sender:    c.makeEventSender(c.userID),
 			Timestamp: readAt,
 		},
-		LastTarget: chattoid.MakeMessageID(marker.GetLastReadEventId()),
+		LastTarget: c.messageID(marker.GetLastReadEventId()),
 	})
 }
 
@@ -551,7 +549,7 @@ func (c *ChattoClient) handleProfileChanged(ctx context.Context, userID string) 
 	if userID == c.userID {
 		c.updateRemoteProfile(ctx, user)
 	}
-	ghost, err := c.Main.Bridge.GetGhostByID(ctx, chattoid.MakeUserID(userID))
+	ghost, err := c.Main.Bridge.GetGhostByID(ctx, c.ghostID(userID))
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to get ghost")
 		return
@@ -566,7 +564,7 @@ func (c *ChattoClient) handlePresence(ctx context.Context, userID string, presen
 	if !c.Main.Config.SyncPresence || userID == "" {
 		return
 	}
-	ghost, err := c.Main.Bridge.GetGhostByID(ctx, chattoid.MakeUserID(userID))
+	ghost, err := c.Main.Bridge.GetGhostByID(ctx, c.ghostID(userID))
 	if err != nil {
 		return
 	}
@@ -588,7 +586,13 @@ func (c *ChattoClient) handleInvitation(ctx context.Context, roomID, invitationI
 	if err == nil {
 		name = resp.Msg.GetRoom().GetRoom().GetName()
 	}
-	c.notifyUser(ctx, fmt.Sprintf("You were invited to #%s on Chatto. Run `accept-invite %s` to join.", name, invitationID))
+	cmd := "accept-invite " + invitationID
+	where := "Chatto"
+	if len(c.Main.Config.Servers) > 1 {
+		cmd += " --server " + c.serverID
+		where = c.serverID
+	}
+	c.notifyUser(ctx, fmt.Sprintf("You were invited to #%s on %s. Run `%s` to join.", name, where, cmd))
 }
 
 // notifyUser sends a notice to the user's management room.
