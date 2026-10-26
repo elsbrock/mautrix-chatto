@@ -7,6 +7,7 @@ require (
 	connectrpc.com/connect v1.21.1
 	github.com/coder/websocket v1.8.15
 	github.com/google/uuid v1.6.0
+	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/prometheus/client_golang v1.25.0
 	github.com/rs/zerolog v1.35.1
 	github.com/yuin/goldmark v1.8.6
@@ -27,7 +28,6 @@ require (
 	github.com/lib/pq v1.12.3 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-sqlite3 v1.14.52 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/petermattis/goid v0.0.0-20260918085751-abfca077860b // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect

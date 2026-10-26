@@ -1,0 +1,188 @@
+# mautrix-chatto
+
+A Matrix ↔ [Chatto](https://chatto.run) puppeting bridge, built on
+[mautrix-go](https://github.com/mautrix/go) bridgev2.
+
+It connects one Chatto server (0.5 line, realtime protocol v4) to your Matrix
+homeserver:
+- Chatto channels, DMs and group DMs become Matrix rooms.
+- Room groups become spaces.
+- Messages, edits, deletions, reactions, replies, threads, attachments,
+  typing, read state and presence flow both ways.
+
+> **Status:** feature-complete against Chatto `v0.5.0-beta.21`. It is tested
+> against an in-memory fake of Chatto's API and a mock homeserver, but has not
+> been run against a real Chatto server yet. See [MORNING.md](MORNING.md).
+
+## Features
+
+| Feature | Chatto → Matrix | Matrix → Chatto | Notes |
+|---|:-:|:-:|---|
+| Text with formatting | ✅ | ✅ | Chatto's Markdown dialect ↔ Matrix HTML. Bold, italic, strike, code, code blocks, quotes, lists, headings, tables, links, footnotes |
+| Mentions | ✅ | ✅ | `@login` ↔ pills; `@all`/`@here` → `@room`. Uses Chatto's own mention rules |
+| Edits | ✅ | ✅ | Chatto authors can edit for 3 h |
+| Deletes | ✅ | ✅ | Deleting one attachment of a multi-attachment message removes just that attachment |
+| Reactions | ✅ | ✅ | Unicode ↔ gemoji shortcodes; skin tones are folded (Chatto has none). Custom emoji are rejected |
+| Replies | ✅ | ✅ | |
+| Threads | ✅ | ✅ | Respects the room's threading mode; in rooms without threads a thread message becomes a reply |
+| Attachments | ✅ | ✅ | Chunked upload to Chatto; signed URLs downloaded; videos that are still processing are replaced when ready |
+| Captions | ✅ | ✅ | A Chatto message with text and attachments becomes separate Matrix events (ADR 0004) |
+| Link previews | ✅ | ➖ | Chatto previews become Beeper link previews; Chatto generates its own previews for messages from Matrix |
+| Stickers, voice, GIFs | ➖ | ✅ | Sent as attachments |
+| Locations | ➖ | 🟡 | Sent as text with a `geo:` link |
+| Typing | ✅ | ✅ | Refreshed every 2 s; thread typing shows as room typing |
+| Read receipts | 🟡 | ✅ | Only your own read state exists on Chatto (needs double puppeting) |
+| Presence and custom status | ✅ | 🟡 | Ghost presence plus status message; optionally keeps logins online |
+| Room name and topic | ✅ | ✅ | Channels only |
+| Room avatars | ➖ | ➖ | Chatto rooms have no avatars |
+| User avatars and names | ✅ | ➖ | |
+| Room groups → spaces | ✅ | ➖ | |
+| Membership | ✅ | 🟡 | Leaving, adding (invite) and removing (kick) Chatto users in channels |
+| DMs | ✅ | ✅ | Start a DM with `start-chat @login` (human accounts only; Chatto forbids bot DMs) |
+| Group DMs | ✅ | ❌ | Chatto no longer lets anyone create new group DMs |
+| Archived and deleted rooms | ✅ | ➖ | Archived rooms get a notice and topic marker, and sends are refused |
+| Voice calls | 🟡 | ❌ | Start and end notices; no media bridging |
+| Pins | ❌ | ❌ | Not bridged yet |
+| Room invitations | 🟡 | ➖ | Human accounts get a notice and an `accept-invite` command |
+| Backfill | ✅ | ➖ | Initial history, threads, and forward fill after downtime |
+| Double puppeting | ✅ | ✅ | bridgev2 built-in |
+| Relay mode | ✅ | ✅ | bridgev2 relay, or optional per-user **ghost bot** accounts on Chatto |
+| Encryption | ✅ | ✅ | bridgev2 built-in (pure-Go olm) |
+
+✅ supported · 🟡 partial · ➖ not applicable · ❌ not supported (see the notes)
+
+## Logging in
+
+Send `login` to the bridge bot. The available flows are:
+- **Password:** Chatto username or email plus password. The server can turn
+  this off (`auth.direct_login`), and so can the bridge
+  (`network.allow_password_login`).
+- **Browser (OAuth):** only offered when `appservice.public_address` is a
+  public `https://` URL. The bridge hosts its OAuth client metadata document
+  at `/chatto/oauth/client.json`. Chatto has no client registration.
+- **Token:** a bot API key (`cht_BK_…`) or a session refresh token
+  (`cht_RT_…`). The bridge takes over a refresh token, so the session it came
+  from will be signed out.
+
+Each Matrix user can have several Chatto logins.
+
+### Bot accounts
+
+Chatto bots start with **no permissions**, can't be invited, and can't start
+DMs. To bridge a bot account:
+
+1. Log in with the bot's API key.
+2. Log in with the human account that owns the bot.
+3. Run `grant-bot-permissions <bot login>` inside a portal to grant the room
+   scope and add the bot to that room, or with `server` or `group <id>` for a
+   wider scope.
+
+It grants `room.list`, `room.join`, `message.read`, `message.post`,
+`message.post-in-thread`, `message.echo`, `message.attach` and
+`message.react`. Chatto caps grants at the owner's own permissions.
+
+### Matrix users without a Chatto account
+
+- **Relay mode:** run `set-relay` in a portal. Messages from users without a
+  login are then posted by the relay login with a name prefix.
+- **Ghost bots:** with `network.ghost_bots.enabled`, the relay login (which
+  must be a human account with `bot.create`) creates a Chatto bot per Matrix
+  user. Messages then appear under that user's own name, marked as a bot, with
+  no prefix. See [ADR 0005](docs/decisions/0005-matrix-users-without-chatto-accounts.md).
+
+## Quickstart: NixOS
+
+```nix
+{
+  inputs.mautrix-chatto.url = "github:elsbrock/matrix-chatto-bridge";
+
+  outputs = { nixpkgs, mautrix-chatto, ... }: {
+    nixosConfigurations.homelab = nixpkgs.lib.nixosSystem {
+      modules = [
+        mautrix-chatto.nixosModules.default
+        {
+          services.mautrix-chatto = {
+            enable = true;
+            settings = {
+              network.server_url = "https://chat.example.com";
+              homeserver = {
+                address = "http://127.0.0.1:8008";
+                domain = "example.com";
+              };
+              bridge.permissions = {
+                "example.com" = "user";
+                "@you:example.com" = "admin";
+              };
+            };
+            metrics.enable = true; # /metrics, /healthz, /readyz on 127.0.0.1:8001
+            # environmentFile = "/run/secrets/mautrix-chatto.env";
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+- **Synapse:** with `services.matrix-synapse` on the same host, the
+  registration file is added automatically (`registerToSynapse`).
+- **Other homeservers:** point them at `/var/lib/mautrix-chatto/chatto-registration.yaml`.
+- **Prometheus:** with `services.prometheus` enabled, a scrape job and the
+  alert rules are added for you.
+
+## Quickstart: any Linux host
+
+```sh
+nix build github:elsbrock/matrix-chatto-bridge   # or: go build -tags goolm ./cmd/mautrix-chatto
+./result/bin/mautrix-chatto -e -c config.yaml    # writes the example config
+$EDITOR config.yaml                              # network.server_url, homeserver.*, bridge.permissions
+./result/bin/mautrix-chatto -g -c config.yaml -r registration.yaml
+./result/bin/mautrix-chatto -c config.yaml -r registration.yaml
+```
+
+Register `registration.yaml` with your homeserver:
+
+- **Synapse:** add it to `app_service_config_files` and restart.
+- **tuwunel / conduwuit:** send `!admin appservices register` in the admin
+  room, followed by the YAML in a code block.
+
+[example-config.yaml](example-config.yaml) is the complete annotated config.
+The Chatto-specific part is the `network:` section.
+
+## Monitoring
+
+- Enable `network.metrics.enabled` to serve these on `network.metrics.listen`:
+  - `/metrics` (Prometheus)
+  - `/healthz` (process alive)
+  - `/readyz` (connector started)
+- The metrics cover:
+  - realtime connection state, reconnects, recoveries and event lag
+  - RPC latency and errors per method
+  - messages bridged and failures by direction and type
+  - token refreshes
+  - logins by state
+  - the Chatto server version
+- [`deploy/monitoring/grafana-dashboard.json`](deploy/monitoring/grafana-dashboard.json)
+  is a ready-made dashboard.
+- [`deploy/monitoring/alerts.yaml`](deploy/monitoring/alerts.yaml) has
+  Prometheus alert rules for a dead endpoint, disconnected logins, logins
+  needing re-auth, reconnect storms, event lag, bridging errors, RPC error
+  rate and an outdated server.
+
+## Development
+
+```sh
+nix develop          # go, gopls, golangci-lint, buf, protoc plugins
+scripts/check.sh     # vet, lint, race tests: run before pushing
+nix flake check      # build, tests, lint, nixfmt, alert rules, NixOS module
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the layout, the test harness and how
+to update to a new Chatto release. The design decisions are in
+[`docs/decisions`](docs/decisions); protocol details in
+[`docs/chatto-protocol-notes.md`](docs/chatto-protocol-notes.md).
+
+## License
+
+AGPL-3.0-or-later. The vendored Chatto protos under `proto/` are Apache-2.0
+(see [ADR 0002](docs/decisions/0002-proto-licensing.md)).
