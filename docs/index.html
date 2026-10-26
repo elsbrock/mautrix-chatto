@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mautrix-chatto — a Matrix bridge for Chatto</title>
+<meta name="description" content="A Matrix ↔ Chatto puppeting bridge built on mautrix-go bridgev2. Bridges channels, DMs, threads, reactions and attachments both ways.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231f6f5c'/%3E%3Cpath d='M9 12h9M14 20h9' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M15 8l4 4-4 4M17 16l-4 4 4 4' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #fbfaf7;
+    --fg: #1d1d1b;
+    --muted: #5f5e58;
+    --line: #e2e0d8;
+    --panel: #f2f0ea;
+    --code-bg: #f2f0ea;
+    --accent: #1f6f5c;
+    --yes: #1f7a3a;
+    --part: #a26200;
+    --no: #b3261e;
+    --na: #8a8880;
+    --note-bg: #fff6e0;
+    --note-line: #e9c97a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161614;
+      --fg: #e8e6df;
+      --muted: #a3a199;
+      --line: #2e2d29;
+      --panel: #1e1e1b;
+      --code-bg: #1e1e1b;
+      --accent: #5cc4a6;
+      --yes: #6fcf8a;
+      --part: #e0a647;
+      --no: #f2867d;
+      --na: #77756e;
+      --note-bg: #2a2416;
+      --note-line: #6b5524;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main, header, footer { max-width: 760px; margin: 0 auto; padding: 0 16px; }
+  a { color: var(--accent); }
+  a:hover { text-decoration-thickness: 2px; }
+  code, pre, kbd { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.875em; }
+  code { background: var(--code-bg); padding: 0.1em 0.3em; border-radius: 3px; }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    line-height: 1.5;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .c { color: var(--muted); }
+  h1, h2, h3 { line-height: 1.25; }
+  h2 { margin-top: 2.5em; padding-top: 0.5em; border-top: 1px solid var(--line); font-size: 1.35em; }
+  h3 { margin-top: 1.6em; font-size: 1.05em; }
+
+  header { padding-top: 56px; padding-bottom: 8px; }
+  header h1 { font-size: 2.1em; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .tagline { font-size: 1.15em; color: var(--muted); margin: 0 0 20px; }
+  .links { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0; padding: 0; list-style: none; }
+  .links a { font-weight: 500; }
+
+  .note {
+    background: var(--note-bg);
+    border: 1px solid var(--note-line);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin: 28px 0 0;
+  }
+  .note p { margin: 0; }
+
+  .map { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  .map td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .map td:first-child { width: 45%; font-weight: 500; }
+  .map td:nth-child(2) { width: 2em; color: var(--muted); text-align: center; }
+
+  .table-wrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--line); border-radius: 6px; }
+  .features { width: 100%; border-collapse: collapse; font-size: 0.92em; }
+  .features th, .features td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  .features tr:last-child td { border-bottom: none; }
+  .features thead th { background: var(--panel); font-weight: 600; white-space: nowrap; }
+  .features td.m { text-align: center; white-space: nowrap; font-weight: 600; width: 3.5em; }
+  .features td:first-child { white-space: nowrap; }
+  .features td:last-child { color: var(--muted); min-width: 16em; }
+  .y { color: var(--yes); }
+  .p { color: var(--part); }
+  .n { color: var(--no); }
+  .x { color: var(--na); }
+  .legend { color: var(--muted); font-size: 0.9em; }
+
+  ul { padding-left: 1.3em; }
+  li { margin: 0.25em 0; }
+
+  footer { margin-top: 64px; padding-top: 16px; padding-bottom: 48px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9em; }
+  footer p { margin: 0.3em 0; }
+
+  @media (max-width: 560px) {
+    header { padding-top: 32px; }
+    header h1 { font-size: 1.7em; }
+    .map td:first-child { width: auto; }
+    .features thead th, .features td:first-child { white-space: normal; }
+    .features td:last-child { min-width: 0; }
+    .features th, .features td { padding: 7px 6px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>mautrix-chatto</h1>
+  <p class="tagline">A Matrix bridge for <a href="https://chatto.run">Chatto</a>. Use your Chatto servers from any Matrix client.</p>
+  <ul class="links">
+    <li><a href="https://github.com/elsbrock/mautrix-chatto">Source on GitHub</a></li>
+    <li><a href="#install">Install</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="https://github.com/elsbrock/mautrix-chatto/tree/main/docs/decisions">Design decisions</a></li>
+  </ul>
+</header>
+
+<main>
+
+<div class="note">
+  <p><strong>Status:</strong> feature-complete against Chatto <code>v0.5.0-beta.21</code>.
+  It is tested against an in-memory fake of Chatto's API and a mock homeserver,
+  but has not been run against a real Chatto server yet. Expect rough edges, and
+  please <a href="https://github.com/elsbrock/mautrix-chatto/issues">report what you find</a>.</p>
+</div>
+
+<h2 id="what">What it does</h2>
+
+<p>mautrix-chatto is a puppeting bridge built on
+<a href="https://github.com/mautrix/go">mautrix-go</a> bridgev2. You log in with
+your Chatto account and the bridge acts as you on Chatto. Other Chatto users show
+up as ordinary Matrix users. It connects one or more Chatto servers (the 0.5 line,
+realtime protocol v4) to your homeserver:</p>
+
+<table class="map">
+  <tr><td>Chatto server</td><td>→</td><td>Matrix space</td></tr>
+  <tr><td>Channels, DMs, group DMs</td><td>→</td><td>Rooms in that space</td></tr>
+  <tr><td>Room groups</td><td>→</td><td>Subspaces (optional, <code>network.group_spaces</code>)</td></tr>
+  <tr><td>Chatto users</td><td>→</td><td>Ghost users with names and avatars</td></tr>
+</table>
+
+<p>Messages, edits, deletions, reactions, replies, threads, attachments, typing,
+read state and presence flow both ways. Encryption, double puppeting, relay mode
+and backfill come from bridgev2.</p>
+
+<h2 id="features">Features</h2>
+
+<div class="table-wrap">
+<table class="features">
+  <thead>
+    <tr><th>Feature</th><th>Chatto → Matrix</th><th>Matrix → Chatto</th><th>Notes</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Formatted text</td><td class="m y">✓</td><td class="m y">✓</td><td>Chatto's Markdown ↔ Matrix HTML, including code blocks, tables and footnotes</td></tr>
+    <tr><td>Mentions</td><td class="m y">✓</td><td class="m y">✓</td><td><code>@login</code> ↔ pills; <code>@all</code>/<code>@here</code> → <code>@room</code>, using Chatto's own mention rules</td></tr>
+    <tr><td>Edits</td><td class="m y">✓</td><td class="m y">✓</td><td>Chatto allows edits for 3 hours</td></tr>
+    <tr><td>Deletes</td><td class="m y">✓</td><td class="m y">✓</td><td>Single attachments of a message can be removed</td></tr>
+    <tr><td>Reactions</td><td class="m y">✓</td><td class="m y">✓</td><td>Unicode ↔ gemoji shortcodes; custom emoji are rejected</td></tr>
+    <tr><td>Replies</td><td class="m y">✓</td><td class="m y">✓</td><td></td></tr>
+    <tr><td>Threads</td><td class="m y">✓</td><td class="m y">✓</td><td>In rooms without threads, a thread message becomes a reply</td></tr>
+    <tr><td>Attachments</td><td class="m y">✓</td><td class="m y">✓</td><td>Chunked uploads; videos still processing are replaced when ready</td></tr>
+    <tr><td>Link previews</td><td class="m y">✓</td><td class="m x">–</td><td>Chatto generates its own previews for messages from Matrix</td></tr>
+    <tr><td>Stickers, voice, GIFs</td><td class="m x">–</td><td class="m y">✓</td><td>Sent as attachments</td></tr>
+    <tr><td>Locations</td><td class="m x">–</td><td class="m p">~</td><td>Sent as text with a <code>geo:</code> link</td></tr>
+    <tr><td>Typing</td><td class="m y">✓</td><td class="m y">✓</td><td></td></tr>
+    <tr><td>Read receipts</td><td class="m p">~</td><td class="m y">✓</td><td>Chatto only has your own read state (needs double puppeting)</td></tr>
+    <tr><td>Presence and status</td><td class="m y">✓</td><td class="m p">~</td><td>Ghost presence plus custom status message</td></tr>
+    <tr><td>Room name and topic</td><td class="m y">✓</td><td class="m y">✓</td><td>Channels only</td></tr>
+    <tr><td>User names and avatars</td><td class="m y">✓</td><td class="m x">–</td><td></td></tr>
+    <tr><td>Membership</td><td class="m y">✓</td><td class="m p">~</td><td>Leave, invite and kick in channels</td></tr>
+    <tr><td>DMs</td><td class="m y">✓</td><td class="m y">✓</td><td>Start one with <code>start-chat @login</code></td></tr>
+    <tr><td>Group DMs</td><td class="m y">✓</td><td class="m n">✗</td><td>Chatto no longer allows creating new group DMs</td></tr>
+    <tr><td>Pins</td><td class="m y">✓</td><td class="m n">✗</td><td>bridgev2 has no hook for pins made on Matrix</td></tr>
+    <tr><td>Voice calls</td><td class="m p">~</td><td class="m n">✗</td><td>Start and end notices only, no media</td></tr>
+    <tr><td>Backfill</td><td class="m y">✓</td><td class="m x">–</td><td>Initial history, threads, and catch-up after downtime</td></tr>
+    <tr><td>Encryption</td><td class="m y">✓</td><td class="m y">✓</td><td>bridgev2 built-in, pure-Go olm</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="legend"><span class="y">✓</span> supported · <span class="p">~</span> partial · <span class="x">–</span> not applicable · <span class="n">✗</span> not supported.
+The <a href="https://github.com/elsbrock/mautrix-chatto#features">README</a> has the full list.</p>
+
+<h2 id="install">Install</h2>
+
+<h3>NixOS</h3>
+<p>The flake ships a package, an overlay and a NixOS module. With Synapse on the
+same host, the appservice registration is wired up for you.</p>
+<pre><code>{
+  inputs.mautrix-chatto.url = "github:elsbrock/mautrix-chatto";
+
+  outputs = { nixpkgs, mautrix-chatto, ... }: {
+    nixosConfigurations.homelab = nixpkgs.lib.nixosSystem {
+      modules = [
+        mautrix-chatto.nixosModules.default
+        {
+          services.mautrix-chatto = {
+            enable = true;
+            settings = {
+              <span class="c"># id is permanent: it is part of every bridged ID</span>
+              network.servers = [ { id = "main"; url = "https://chat.example.com"; } ];
+              homeserver = {
+                address = "http://127.0.0.1:8008";
+                domain = "example.com";
+              };
+              bridge.permissions = {
+                "example.com" = "user";
+                "@you:example.com" = "admin";
+              };
+            };
+            metrics.enable = true;
+          };
+        }
+      ];
+    };
+  };
+}</code></pre>
+
+<h3>Any Linux host</h3>
+<pre><code>nix build github:elsbrock/mautrix-chatto   <span class="c"># or: go build -tags goolm ./cmd/mautrix-chatto</span>
+./result/bin/mautrix-chatto -e -c config.yaml    <span class="c"># write the example config</span>
+$EDITOR config.yaml                              <span class="c"># network.servers, homeserver.*, bridge.permissions</span>
+./result/bin/mautrix-chatto -g -c config.yaml -r registration.yaml
+./result/bin/mautrix-chatto -c config.yaml -r registration.yaml</code></pre>
+<p>Then register <code>registration.yaml</code> with your homeserver. For Synapse,
+add it to <code>app_service_config_files</code>. For tuwunel or conduwuit, send
+<code>!admin appservices register</code> in the admin room, followed by the YAML in a code block.</p>
+
+<h3>Container</h3>
+<pre><code>nix build github:elsbrock/mautrix-chatto#docker &amp;&amp; docker load &lt; result
+docker run --rm -v $PWD/data:/data mautrix-chatto -e -c /data/config.yaml
+<span class="c"># set appservice.hostname to 0.0.0.0 in data/config.yaml, then:</span>
+docker run --rm -v $PWD/data:/data mautrix-chatto -g -c /data/config.yaml -r /data/registration.yaml
+docker run -d -v $PWD/data:/data -p 29340:29340 mautrix-chatto</code></pre>
+
+<p>The annotated <a href="https://github.com/elsbrock/mautrix-chatto/blob/main/example-config.yaml">example-config.yaml</a>
+covers every option. The Chatto-specific part is the <code>network:</code> section.</p>
+
+<h2 id="login">Logging in</h2>
+<p>Send <code>login</code> to the bridge bot. Three flows are available:</p>
+<ul>
+  <li><strong>Password</strong>: your Chatto username or email and password.</li>
+  <li><strong>Browser (OAuth)</strong>: needs the bridge reachable at a public <code>https://</code> address, because Chatto fetches the bridge's client metadata itself.</li>
+  <li><strong>Token</strong>: a bot API key, or a session refresh token that the bridge takes over.</li>
+</ul>
+<p>You can have several logins, on one server or across several. Matrix users
+without a Chatto account can still take part through relay mode, or through
+per-user <em>ghost bots</em> that post under their own name.</p>
+
+<h2 id="ops">Running it</h2>
+<ul>
+  <li><strong>Several servers.</strong> Add an entry to <code>network.servers</code> and restart. Each server appears as its own space.</li>
+  <li><strong>Metrics.</strong> <code>/metrics</code>, <code>/healthz</code> and <code>/readyz</code>, covering connection state, event lag, RPC latency and bridging failures.</li>
+  <li><strong>Dashboards and alerts.</strong> A Grafana dashboard and Prometheus alert rules are in <a href="https://github.com/elsbrock/mautrix-chatto/tree/main/deploy/monitoring"><code>deploy/monitoring</code></a>. The NixOS module adds both when Prometheus is enabled.</li>
+  <li><strong>Server version.</strong> Each bridge release is built against one pinned Chatto release. An older server is logged at startup, or refused with <code>network.strict_server_version</code>. Chatto 0.4 is not supported.</li>
+</ul>
+
+<h2 id="dev">Development</h2>
+<pre><code>nix develop          <span class="c"># go, gopls, golangci-lint, buf, protoc plugins</span>
+scripts/check.sh     <span class="c"># vet, lint, race tests</span>
+nix flake check      <span class="c"># build, tests, lint, alert rules, NixOS module</span></code></pre>
+<p>The tests run against an in-memory Chatto built on the real generated API
+handlers. See <a href="https://github.com/elsbrock/mautrix-chatto/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>
+for the layout and the upgrade process, and
+<a href="https://github.com/elsbrock/mautrix-chatto/tree/main/docs/decisions"><code>docs/decisions</code></a>
+for why things are the way they are.</p>
+
+</main>
+
+<footer>
+  <p>AGPL-3.0-or-later. The vendored Chatto protos are Apache-2.0.</p>
+  <p>Not affiliated with the Chatto or mautrix projects.</p>
+</footer>
+
+</body>
+</html>
