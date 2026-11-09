@@ -63,6 +63,28 @@ func TestForwardFillWhenNewestIsThreadReply(t *testing.T) {
 	}
 }
 
+func TestThreadBackfillAsksForTheRoot(t *testing.T) {
+	w := newWorld(t, withBackfill(50))
+	portal := w.portal(w.room.ID)
+	w.srv.PostMessage(w.bob.ID, w.room.ID, "before the outage")
+	w.waitMessage(portal.MXID, "before the outage")
+
+	w.srv.ExpireCursors()
+	w.srv.DropRealtime()
+	time.Sleep(10 * time.Millisecond)
+	root := w.srv.PostMessage(w.bob.ID, w.room.ID, "root during outage")
+	w.srv.PostMessage(w.bob.ID, w.room.ID, "reply during outage", chattotest.InThread(root.ID))
+
+	w.waitMessage(portal.MXID, "reply during outage")
+	// Once to find the missed replies, once for the thread backfill.
+	w.eventually("thread backfill", func() bool { return len(w.srv.ThreadRequests()) >= 2 })
+	for _, requested := range w.srv.ThreadRequests() {
+		if requested != root.ID {
+			t.Errorf("asked for thread %s, want its root %s", requested, root.ID)
+		}
+	}
+}
+
 func TestCaptionedMatrixMediaSurvivesChattoEdit(t *testing.T) {
 	w := newWorld(t)
 	portal := w.portal(w.room.ID)

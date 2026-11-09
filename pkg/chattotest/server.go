@@ -165,6 +165,9 @@ type Server struct {
 	cursorFloor int
 	events      []*loggedEvent
 	subs        map[*subscription]struct{}
+
+	// threadRequests records the IDs GetThreadEvents was asked for.
+	threadRequests []string
 }
 
 type upload struct {

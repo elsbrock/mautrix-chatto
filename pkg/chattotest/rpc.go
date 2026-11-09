@@ -558,6 +558,13 @@ type threadService struct {
 	s *Server
 }
 
+// ThreadRequests returns the IDs GetThreadEvents was asked for, in order.
+func (s *Server) ThreadRequests() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.threadRequests)
+}
+
 func (ts *threadService) GetThreadEvents(ctx context.Context, req *connect.Request[apiv1.GetThreadEventsRequest]) (*connect.Response[apiv1.GetThreadEventsResponse], error) {
 	ts.s.mu.Lock()
 	defer ts.s.mu.Unlock()
@@ -565,9 +572,13 @@ func (ts *threadService) GetThreadEvents(ctx context.Context, req *connect.Reque
 	if _, err := ts.s.memberRoomLocked(req.Msg.GetRoomId(), uid); err != nil {
 		return nil, err
 	}
+	ts.s.threadRequests = append(ts.s.threadRequests, req.Msg.GetThreadRootEventId())
 	root, ok := ts.s.messages[req.Msg.GetThreadRootEventId()]
 	if !ok {
 		return nil, errNotFound("thread")
+	}
+	if root.ThreadRoot != "" {
+		return nil, errInvalid("thread_root_event_id must identify a root message")
 	}
 	ids := ts.s.threads[root.ID]
 	limit := limitOr(req.Msg.GetLimit())

@@ -28,6 +28,11 @@ func (c *ChattoClient) FetchMessages(ctx context.Context, params bridgev2.FetchM
 	var err error
 	limit := int32(min(max(params.Count, 1), 500))
 	threadRoot := c.eventID(params.ThreadRoot)
+	if threadRoot != "" && params.AnchorMessage != nil && params.AnchorMessage.ThreadRoot != "" {
+		// bridgev2 names a thread by its newest bridged message, which is a
+		// reply once the thread has any. Chatto only accepts the root.
+		threadRoot = c.eventID(params.AnchorMessage.ThreadRoot)
+	}
 	pager := &timelinePager{c: c, roomID: roomID, threadRoot: threadRoot, limit: limit}
 
 	var events []*apiv1.RoomTimelineEvent
@@ -43,6 +48,12 @@ func (c *ChattoClient) FetchMessages(ctx context.Context, params bridgev2.FetchM
 		events, page, err = pager.since(ctx, since, max(params.Count, 1))
 		if err != nil {
 			return nil, err
+		}
+		if threadRoot != "" && params.AnchorMessage != nil {
+			// The anchor is already on Matrix; a page of only the anchor means
+			// there is nothing new.
+			anchorID := c.eventID(params.AnchorMessage.ID)
+			events = slices.DeleteFunc(events, func(e *apiv1.RoomTimelineEvent) bool { return e.GetId() == anchorID })
 		}
 		if threadRoot == "" && params.AnchorMessage != nil {
 			replies, err := c.missedThreadReplies(ctx, roomID, page, events, since)
