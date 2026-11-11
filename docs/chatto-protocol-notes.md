@@ -1,4 +1,4 @@
-# Chatto protocol notes (v0.5.0-beta.21)
+# Chatto protocol notes (v0.5.0)
 
 Facts the bridge relies on, gathered from the Chatto source at the pinned tag.
 Paths refer to the upstream repository. The public docs at docs.chatto.run

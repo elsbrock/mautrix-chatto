@@ -42,6 +42,9 @@ const (
 	// AdminUserServiceBatchGetMembersProcedure is the fully-qualified name of the AdminUserService's
 	// BatchGetMembers RPC.
 	AdminUserServiceBatchGetMembersProcedure = "/chatto.admin.v1.AdminUserService/BatchGetMembers"
+	// AdminUserServiceGetUserRoleAssignmentsProcedure is the fully-qualified name of the
+	// AdminUserService's GetUserRoleAssignments RPC.
+	AdminUserServiceGetUserRoleAssignmentsProcedure = "/chatto.admin.v1.AdminUserService/GetUserRoleAssignments"
 	// AdminUserServiceAssignRoleProcedure is the fully-qualified name of the AdminUserService's
 	// AssignRole RPC.
 	AdminUserServiceAssignRoleProcedure = "/chatto.admin.v1.AdminUserService/AssignRole"
@@ -57,6 +60,9 @@ const (
 	// AdminUserServiceDeleteUserProcedure is the fully-qualified name of the AdminUserService's
 	// DeleteUser RPC.
 	AdminUserServiceDeleteUserProcedure = "/chatto.admin.v1.AdminUserService/DeleteUser"
+	// AdminUserServiceSetUserDeactivatedProcedure is the fully-qualified name of the AdminUserService's
+	// SetUserDeactivated RPC.
+	AdminUserServiceSetUserDeactivatedProcedure = "/chatto.admin.v1.AdminUserService/SetUserDeactivated"
 )
 
 // AdminUserServiceClient is a client for the chatto.admin.v1.AdminUserService service.
@@ -69,6 +75,11 @@ type AdminUserServiceClient interface {
 	GetMember(context.Context, *connect.Request[v1.GetMemberRequest]) (*connect.Response[v1.GetMemberResponse], error)
 	// Gets server member rows for multiple users. Requires admin.view-users.
 	BatchGetMembers(context.Context, *connect.Request[v1.BatchGetMembersRequest]) (*connect.Response[v1.BatchGetMembersResponse], error)
+	// Gets explicit roles and current assignment limits for one human user.
+	// Requires role.assign, with privileged mode active for human sessions;
+	// admin.view-users is not required. Returns NOT_FOUND for an unknown or
+	// deleted user, and FAILED_PRECONDITION for a bot account.
+	GetUserRoleAssignments(context.Context, *connect.Request[v1.GetUserRoleAssignmentsRequest]) (*connect.Response[v1.GetUserRoleAssignmentsResponse], error)
 	// Assigns a role to a user. Requires role.assign, and non-owner callers may
 	// only assign roles whose granted authority they already possess.
 	AssignRole(context.Context, *connect.Request[v1.AssignRoleRequest]) (*connect.Response[v1.AssignRoleResponse], error)
@@ -85,6 +96,12 @@ type AdminUserServiceClient interface {
 	// Deletes a user account as an admin action. Requires user.delete-any for
 	// other users or user.delete-self for the caller.
 	DeleteUser(context.Context, *connect.Request[v1.DeleteUserRequest]) (*connect.Response[v1.DeleteUserResponse], error)
+	// Deactivates or reactivates a human account. Requires user.manage-accounts.
+	// The caller cannot target their own account or an owner account.
+	// Deactivation immediately invalidates existing sessions and prevents sign-in.
+	// Reactivation permits new sign-ins; old sessions remain invalid.
+	// Repeating the current state succeeds without changing it.
+	SetUserDeactivated(context.Context, *connect.Request[v1.SetUserDeactivatedRequest]) (*connect.Response[v1.SetUserDeactivatedResponse], error)
 }
 
 // NewAdminUserServiceClient constructs a client for the chatto.admin.v1.AdminUserService service.
@@ -114,6 +131,12 @@ func NewAdminUserServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+AdminUserServiceBatchGetMembersProcedure,
 			connect.WithSchema(adminUserServiceMethods.ByName("BatchGetMembers")),
+			connect.WithClientOptions(opts...),
+		),
+		getUserRoleAssignments: connect.NewClient[v1.GetUserRoleAssignmentsRequest, v1.GetUserRoleAssignmentsResponse](
+			httpClient,
+			baseURL+AdminUserServiceGetUserRoleAssignmentsProcedure,
+			connect.WithSchema(adminUserServiceMethods.ByName("GetUserRoleAssignments")),
 			connect.WithClientOptions(opts...),
 		),
 		assignRole: connect.NewClient[v1.AssignRoleRequest, v1.AssignRoleResponse](
@@ -146,19 +169,27 @@ func NewAdminUserServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(adminUserServiceMethods.ByName("DeleteUser")),
 			connect.WithClientOptions(opts...),
 		),
+		setUserDeactivated: connect.NewClient[v1.SetUserDeactivatedRequest, v1.SetUserDeactivatedResponse](
+			httpClient,
+			baseURL+AdminUserServiceSetUserDeactivatedProcedure,
+			connect.WithSchema(adminUserServiceMethods.ByName("SetUserDeactivated")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // adminUserServiceClient implements AdminUserServiceClient.
 type adminUserServiceClient struct {
-	listMembers           *connect.Client[v1.ListMembersRequest, v1.ListMembersResponse]
-	getMember             *connect.Client[v1.GetMemberRequest, v1.GetMemberResponse]
-	batchGetMembers       *connect.Client[v1.BatchGetMembersRequest, v1.BatchGetMembersResponse]
-	assignRole            *connect.Client[v1.AssignRoleRequest, v1.AssignRoleResponse]
-	revokeRole            *connect.Client[v1.RevokeRoleRequest, v1.RevokeRoleResponse]
-	changeUserPassword    *connect.Client[v1.ChangeUserPasswordRequest, v1.ChangeUserPasswordResponse]
-	clearUsernameCooldown *connect.Client[v1.ClearUsernameCooldownRequest, v1.ClearUsernameCooldownResponse]
-	deleteUser            *connect.Client[v1.DeleteUserRequest, v1.DeleteUserResponse]
+	listMembers            *connect.Client[v1.ListMembersRequest, v1.ListMembersResponse]
+	getMember              *connect.Client[v1.GetMemberRequest, v1.GetMemberResponse]
+	batchGetMembers        *connect.Client[v1.BatchGetMembersRequest, v1.BatchGetMembersResponse]
+	getUserRoleAssignments *connect.Client[v1.GetUserRoleAssignmentsRequest, v1.GetUserRoleAssignmentsResponse]
+	assignRole             *connect.Client[v1.AssignRoleRequest, v1.AssignRoleResponse]
+	revokeRole             *connect.Client[v1.RevokeRoleRequest, v1.RevokeRoleResponse]
+	changeUserPassword     *connect.Client[v1.ChangeUserPasswordRequest, v1.ChangeUserPasswordResponse]
+	clearUsernameCooldown  *connect.Client[v1.ClearUsernameCooldownRequest, v1.ClearUsernameCooldownResponse]
+	deleteUser             *connect.Client[v1.DeleteUserRequest, v1.DeleteUserResponse]
+	setUserDeactivated     *connect.Client[v1.SetUserDeactivatedRequest, v1.SetUserDeactivatedResponse]
 }
 
 // ListMembers calls chatto.admin.v1.AdminUserService.ListMembers.
@@ -174,6 +205,11 @@ func (c *adminUserServiceClient) GetMember(ctx context.Context, req *connect.Req
 // BatchGetMembers calls chatto.admin.v1.AdminUserService.BatchGetMembers.
 func (c *adminUserServiceClient) BatchGetMembers(ctx context.Context, req *connect.Request[v1.BatchGetMembersRequest]) (*connect.Response[v1.BatchGetMembersResponse], error) {
 	return c.batchGetMembers.CallUnary(ctx, req)
+}
+
+// GetUserRoleAssignments calls chatto.admin.v1.AdminUserService.GetUserRoleAssignments.
+func (c *adminUserServiceClient) GetUserRoleAssignments(ctx context.Context, req *connect.Request[v1.GetUserRoleAssignmentsRequest]) (*connect.Response[v1.GetUserRoleAssignmentsResponse], error) {
+	return c.getUserRoleAssignments.CallUnary(ctx, req)
 }
 
 // AssignRole calls chatto.admin.v1.AdminUserService.AssignRole.
@@ -201,6 +237,11 @@ func (c *adminUserServiceClient) DeleteUser(ctx context.Context, req *connect.Re
 	return c.deleteUser.CallUnary(ctx, req)
 }
 
+// SetUserDeactivated calls chatto.admin.v1.AdminUserService.SetUserDeactivated.
+func (c *adminUserServiceClient) SetUserDeactivated(ctx context.Context, req *connect.Request[v1.SetUserDeactivatedRequest]) (*connect.Response[v1.SetUserDeactivatedResponse], error) {
+	return c.setUserDeactivated.CallUnary(ctx, req)
+}
+
 // AdminUserServiceHandler is an implementation of the chatto.admin.v1.AdminUserService service.
 type AdminUserServiceHandler interface {
 	// Lists server members for the admin members screen. Requires
@@ -211,6 +252,11 @@ type AdminUserServiceHandler interface {
 	GetMember(context.Context, *connect.Request[v1.GetMemberRequest]) (*connect.Response[v1.GetMemberResponse], error)
 	// Gets server member rows for multiple users. Requires admin.view-users.
 	BatchGetMembers(context.Context, *connect.Request[v1.BatchGetMembersRequest]) (*connect.Response[v1.BatchGetMembersResponse], error)
+	// Gets explicit roles and current assignment limits for one human user.
+	// Requires role.assign, with privileged mode active for human sessions;
+	// admin.view-users is not required. Returns NOT_FOUND for an unknown or
+	// deleted user, and FAILED_PRECONDITION for a bot account.
+	GetUserRoleAssignments(context.Context, *connect.Request[v1.GetUserRoleAssignmentsRequest]) (*connect.Response[v1.GetUserRoleAssignmentsResponse], error)
 	// Assigns a role to a user. Requires role.assign, and non-owner callers may
 	// only assign roles whose granted authority they already possess.
 	AssignRole(context.Context, *connect.Request[v1.AssignRoleRequest]) (*connect.Response[v1.AssignRoleResponse], error)
@@ -227,6 +273,12 @@ type AdminUserServiceHandler interface {
 	// Deletes a user account as an admin action. Requires user.delete-any for
 	// other users or user.delete-self for the caller.
 	DeleteUser(context.Context, *connect.Request[v1.DeleteUserRequest]) (*connect.Response[v1.DeleteUserResponse], error)
+	// Deactivates or reactivates a human account. Requires user.manage-accounts.
+	// The caller cannot target their own account or an owner account.
+	// Deactivation immediately invalidates existing sessions and prevents sign-in.
+	// Reactivation permits new sign-ins; old sessions remain invalid.
+	// Repeating the current state succeeds without changing it.
+	SetUserDeactivated(context.Context, *connect.Request[v1.SetUserDeactivatedRequest]) (*connect.Response[v1.SetUserDeactivatedResponse], error)
 }
 
 // NewAdminUserServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -252,6 +304,12 @@ func NewAdminUserServiceHandler(svc AdminUserServiceHandler, opts ...connect.Han
 		AdminUserServiceBatchGetMembersProcedure,
 		svc.BatchGetMembers,
 		connect.WithSchema(adminUserServiceMethods.ByName("BatchGetMembers")),
+		connect.WithHandlerOptions(opts...),
+	)
+	adminUserServiceGetUserRoleAssignmentsHandler := connect.NewUnaryHandler(
+		AdminUserServiceGetUserRoleAssignmentsProcedure,
+		svc.GetUserRoleAssignments,
+		connect.WithSchema(adminUserServiceMethods.ByName("GetUserRoleAssignments")),
 		connect.WithHandlerOptions(opts...),
 	)
 	adminUserServiceAssignRoleHandler := connect.NewUnaryHandler(
@@ -284,6 +342,12 @@ func NewAdminUserServiceHandler(svc AdminUserServiceHandler, opts ...connect.Han
 		connect.WithSchema(adminUserServiceMethods.ByName("DeleteUser")),
 		connect.WithHandlerOptions(opts...),
 	)
+	adminUserServiceSetUserDeactivatedHandler := connect.NewUnaryHandler(
+		AdminUserServiceSetUserDeactivatedProcedure,
+		svc.SetUserDeactivated,
+		connect.WithSchema(adminUserServiceMethods.ByName("SetUserDeactivated")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/chatto.admin.v1.AdminUserService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AdminUserServiceListMembersProcedure:
@@ -292,6 +356,8 @@ func NewAdminUserServiceHandler(svc AdminUserServiceHandler, opts ...connect.Han
 			adminUserServiceGetMemberHandler.ServeHTTP(w, r)
 		case AdminUserServiceBatchGetMembersProcedure:
 			adminUserServiceBatchGetMembersHandler.ServeHTTP(w, r)
+		case AdminUserServiceGetUserRoleAssignmentsProcedure:
+			adminUserServiceGetUserRoleAssignmentsHandler.ServeHTTP(w, r)
 		case AdminUserServiceAssignRoleProcedure:
 			adminUserServiceAssignRoleHandler.ServeHTTP(w, r)
 		case AdminUserServiceRevokeRoleProcedure:
@@ -302,6 +368,8 @@ func NewAdminUserServiceHandler(svc AdminUserServiceHandler, opts ...connect.Han
 			adminUserServiceClearUsernameCooldownHandler.ServeHTTP(w, r)
 		case AdminUserServiceDeleteUserProcedure:
 			adminUserServiceDeleteUserHandler.ServeHTTP(w, r)
+		case AdminUserServiceSetUserDeactivatedProcedure:
+			adminUserServiceSetUserDeactivatedHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -323,6 +391,10 @@ func (UnimplementedAdminUserServiceHandler) BatchGetMembers(context.Context, *co
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("chatto.admin.v1.AdminUserService.BatchGetMembers is not implemented"))
 }
 
+func (UnimplementedAdminUserServiceHandler) GetUserRoleAssignments(context.Context, *connect.Request[v1.GetUserRoleAssignmentsRequest]) (*connect.Response[v1.GetUserRoleAssignmentsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("chatto.admin.v1.AdminUserService.GetUserRoleAssignments is not implemented"))
+}
+
 func (UnimplementedAdminUserServiceHandler) AssignRole(context.Context, *connect.Request[v1.AssignRoleRequest]) (*connect.Response[v1.AssignRoleResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("chatto.admin.v1.AdminUserService.AssignRole is not implemented"))
 }
@@ -341,4 +413,8 @@ func (UnimplementedAdminUserServiceHandler) ClearUsernameCooldown(context.Contex
 
 func (UnimplementedAdminUserServiceHandler) DeleteUser(context.Context, *connect.Request[v1.DeleteUserRequest]) (*connect.Response[v1.DeleteUserResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("chatto.admin.v1.AdminUserService.DeleteUser is not implemented"))
+}
+
+func (UnimplementedAdminUserServiceHandler) SetUserDeactivated(context.Context, *connect.Request[v1.SetUserDeactivatedRequest]) (*connect.Response[v1.SetUserDeactivatedResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("chatto.admin.v1.AdminUserService.SetUserDeactivated is not implemented"))
 }

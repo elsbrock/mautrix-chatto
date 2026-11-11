@@ -22,7 +22,7 @@ for pkg in api admin discovery realtime operator; do
 	rm -rf "proto/chatto/$pkg"
 	cp -r "$tmp/chatto/proto/chatto/$pkg" proto/chatto/
 done
-find proto -name AGENTS.md -delete
+find proto \( -name AGENTS.md -o -name CLAUDE.md \) -delete
 cp "$tmp/chatto/proto/buf.lock" proto/buf.lock
 
 # Keep the mention test cases in sync with the server's.

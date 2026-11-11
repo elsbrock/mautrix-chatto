@@ -30,7 +30,7 @@ import (
 )
 
 // Version is the version the fake server reports.
-const Version = "v0.5.0-beta.21"
+const Version = "v0.5.0"
 
 // User is a fake account.
 type User struct {

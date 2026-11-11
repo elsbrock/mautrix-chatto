@@ -9,7 +9,8 @@ realtime **v4**: a single `RealtimeSubscribe` frame, resume cursors, snapshots
 and typed close frames. The two are not compatible.
 
 ## Decision
-- Build against `v0.5.0-beta.21` and vendor its `proto/` into `proto/`.
+- Build against one pinned 0.5 release (first `v0.5.0-beta.21`, now `v0.5.0`)
+  and vendor its `proto/` into `proto/`.
   The generated Go code is committed in `pkg/chattopb`.
 - Keep the upstream version in one place: `chattoclient.UpstreamVersion`.
   `scripts/sync-proto.sh` reads it, and so do metrics and `chatto-server`.

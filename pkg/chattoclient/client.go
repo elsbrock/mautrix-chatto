@@ -23,7 +23,7 @@ import (
 
 // UpstreamVersion is the Chatto release whose protos are vendored in proto/.
 // scripts/sync-proto.sh reads it; keep it the single source of truth.
-const UpstreamVersion = "v0.5.0-beta.21"
+const UpstreamVersion = "v0.5.0"
 
 // connectPrefix is where Chatto mounts its ConnectRPC handlers.
 const connectPrefix = "/api/connect"
