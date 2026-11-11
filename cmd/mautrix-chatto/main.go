@@ -37,7 +37,7 @@ func main() {
 		Name:        "mautrix-chatto",
 		URL:         "https://github.com/elsbrock/mautrix-chatto",
 		Description: "A Matrix-Chatto puppeting bridge.",
-		Version:     "0.1.0",
+		Version:     "0.1.1",
 		Connector:   c,
 	}
 	m.InitVersion(Tag, Commit, BuildTime)
