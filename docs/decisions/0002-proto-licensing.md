@@ -16,11 +16,12 @@ definitions").
   (mention scanning and URL detection) with attribution. That is compatible
   because the bridge is AGPL too.
 - `pkg/chattofmt/testdata/mentions_extraction.json` is copied from Chatto's
-  `testdata/` (AGPL), which is also compatible.
+  `testdata/mentions/`, which `REUSE.toml` lists as Apache-2.0.
 - `pkg/emoji/emoji_gen.go` is generated from Chatto's emoji catalogue (AGPL),
   which is built from gemoji (MIT) and Unicode's skin-tone sequences (Unicode
   License). The generated file names its sources.
 
 ## Consequences
 Anyone forking the bridge under a permissive licence must replace
-`mentions.go` and the mention test data.
+`mentions.go` and generate `pkg/emoji/emoji_gen.go` from gemoji and
+Unicode's data directly. The mention test data can stay.
