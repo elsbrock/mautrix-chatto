@@ -55,8 +55,8 @@ describe the older 0.4 line and are partly out of date (e.g. realtime v1).
 
 ## Rooms, users and media
 
-- RoomKind is CHANNEL or DM. A group DM is a DM with more than two `member_user_ids`. Bots cannot
-  StartDM, and new DMs are 1:1 only. Rooms have no avatar.
+- RoomKind is CHANNEL or DM. A group DM is a DM with more than two `member_user_ids`. New DMs are
+  1:1 only; creating one needs message.post at DM scope, for bots too (since 0.5.0). Rooms have no avatar.
 - `RoomDirectoryService.ListRooms` (offset pages, max 100), `GetRoom`, `ListRoomGroups`.
   Room groups are spaces in the sidebar order.
 - Universal rooms: every member is in them implicitly; no leave, no invites.
@@ -102,10 +102,11 @@ describe the older 0.4 line and are partly out of date (e.g. realtime v1).
 
 ## Bots and permissions
 
-- `BotService` (human tokens only): CreateBot{login, display_name} returns a one-time api_key.
+- `BotService`: CreateBot{login, display_name} returns a one-time api_key. Since 0.5.0 bot API keys
+  can call it too, with explicit permissions bounded by their owner's.
   The owner can rename the bot, set its avatar (UserService), add it to rooms (`RoomService.AddMember`) and
   grant it permissions. Bots get **no baseline permissions**; grants are an allowlist capped
-  at the owner's own permissions. Bots cannot StartDM, cannot be invited and cannot get roles.
+  at the owner's own permissions. Bots cannot be invited and cannot get roles.
 - `AdminPermissionService.SetUserPermission{user_id, permission, decision, scope{kind,id}}`.
   Permissions a bridge bot needs: `message.read`, `message.post`, `message.post-in-thread`,
   `message.attach`, `message.react`, `message.echo`, `room.list`, `room.join`.

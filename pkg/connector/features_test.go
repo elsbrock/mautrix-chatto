@@ -2,6 +2,7 @@ package connector
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
@@ -202,6 +204,32 @@ func TestGroupDMPortal(t *testing.T) {
 		p, _ := h.br.DB.Portal.GetByKey(h.ctx, chattoid.MakePortalKey(testServer, dm.ID))
 		return p.RoomType == database.RoomTypeGroupDM
 	})
+}
+
+func TestBotLoginStartsDM(t *testing.T) {
+	// Since Chatto 0.5 a bot with message.post can start DMs; the server decides.
+	h := newHarness(t)
+	owner := h.srv.AddUser("owner", "Owner", "pw")
+	h.srv.AddUser("bob", "Bob", "pw")
+	_, key := h.srv.AddBot("dmbot", "DM Bot", owner.ID)
+	user, _ := h.br.GetUserByMXID(h.ctx, "@botowner:test")
+	proc, _ := h.conn.CreateLogin(h.ctx, user, LoginFlowToken)
+	_, _ = proc.Start(h.ctx)
+	step, err := proc.(interface {
+		SubmitUserInput(context.Context, map[string]string) (*bridgev2.LoginStep, error)
+	}).SubmitUserInput(h.ctx, map[string]string{"token": key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	login := step.CompleteParams.UserLogin
+	h.eventually("bot connected", func() bool { return h.conn.loginState(login.ID) == status.StateConnected })
+	resp, err := login.Client.(*ChattoClient).ResolveIdentifier(h.ctx, "@bob", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Chat == nil || resp.Chat.PortalKey.ID == "" {
+		t.Fatalf("resolve response %+v", resp)
+	}
 }
 
 func TestStartDMFromMatrix(t *testing.T) {

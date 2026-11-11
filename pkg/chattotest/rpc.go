@@ -424,10 +424,6 @@ func (rs *roomService) ListMembers(ctx context.Context, req *connect.Request[api
 func (rs *roomService) StartDM(ctx context.Context, req *connect.Request[apiv1.StartDMRequest]) (*connect.Response[apiv1.StartDMResponse], error) {
 	uid := viewerID(ctx)
 	rs.s.mu.Lock()
-	if rs.s.users[uid].BotOwner != "" {
-		rs.s.mu.Unlock()
-		return nil, errDenied("bots cannot start DMs")
-	}
 	want := append([]string{uid}, req.Msg.GetParticipantIds()...)
 	slices.Sort(want)
 	for _, r := range rs.s.rooms {

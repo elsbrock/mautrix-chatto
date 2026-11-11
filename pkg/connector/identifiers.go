@@ -12,12 +12,6 @@ import (
 	apiv1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
 )
 
-var ErrBotsCannotStartDMs = bridgev2.RespError{
-	ErrCode:    "RUN.CHATTO.BOT_CANNOT_START_DM",
-	Err:        "Chatto bot accounts cannot start direct messages; a human has to start the DM with the bot",
-	StatusCode: 403,
-}
-
 // lookupUser resolves "@login", "login" or a user ID.
 func (c *ChattoClient) lookupUser(ctx context.Context, identifier string) (*apiv1.User, error) {
 	identifier = strings.TrimSpace(identifier)
@@ -70,9 +64,6 @@ func (c *ChattoClient) userToResolveResponse(ctx context.Context, user *apiv1.Us
 }
 
 func (c *ChattoClient) startDM(ctx context.Context, userID string) (*bridgev2.CreateChatResponse, error) {
-	if c.isBot() {
-		return nil, ErrBotsCannotStartDMs
-	}
 	resp, err := c.api.Rooms.StartDM(ctx, connect.NewRequest(&apiv1.StartDMRequest{ParticipantIds: []string{userID}}))
 	if err != nil {
 		return nil, fmt.Errorf("failed to start DM: %w", wrapSendError(err))
