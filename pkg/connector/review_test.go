@@ -4,10 +4,12 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/event"
 
 	"github.com/elsbrock/mautrix-chatto/pkg/chattoid"
+	apiv1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/api/v1"
 	realtimev1 "github.com/elsbrock/mautrix-chatto/pkg/chattopb/chatto/realtime/v1"
 	"github.com/elsbrock/mautrix-chatto/pkg/chattotest"
 )
@@ -103,6 +105,41 @@ func TestCaptionedMatrixMediaSurvivesChattoEdit(t *testing.T) {
 			t.Logf("unexpected event: %+v", e.Message())
 		}
 		t.Fatalf("chatto edit of captioned media produced %d Matrix events", after-before)
+	}
+}
+
+func TestMatrixGIFSurvivesChattoVideoProcessing(t *testing.T) {
+	w := newWorld(t)
+	portal := w.portal(w.room.ID)
+	uri, _, _ := w.mx.BotIntent().UploadMedia(w.ctx, "", []byte("GIF89a"), "cat.gif", "image/gif")
+	w.sendMatrix(portal.MXID, aliceMXID, event.EventMessage, &event.MessageEventContent{
+		MsgType: event.MsgImage, Body: "cat.gif", FileName: "cat.gif", URL: uri,
+		Info: &event.FileInfo{MimeType: "image/gif", Size: 6},
+	})
+	sent := w.waitChatto(t, func(m *chattotest.Message) bool {
+		return len(m.Attachments) == 1 && m.Attachments[0].Filename == "cat.gif"
+	})
+	w.eventually("db part", func() bool { return len(w.dbMessage(sent.ID)) == 1 })
+
+	// Chatto converts animated GIFs to video and then announces the message
+	// as changed. The harness has no double puppeting, so bridgev2 drops that
+	// edit on sender mismatch before it reaches convertEdit; call it directly.
+	cc := w.br.GetCachedUserLoginByID(chattoid.MakeUserLoginID(testServer, w.alice.ID)).Client.(*ChattoClient)
+	resp, err := cc.api.Messages.GetMessage(w.ctx, connect.NewRequest(&apiv1.GetMessageRequest{RoomId: w.room.ID, EventId: sent.ID}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg := resp.Msg.GetMessage()
+	msg.GetAttachments()[0].VideoProcessing = &apiv1.MessageVideoProcessing{
+		Status: apiv1.MessageVideoProcessingStatus_MESSAGE_VIDEO_PROCESSING_STATUS_COMPLETED,
+	}
+	live, err := w.br.GetExistingPortalByKey(w.ctx, portal.PortalKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edit := cc.convertEdit(w.ctx, live, w.mx.BotIntent(), w.dbMessage(sent.ID), msg)
+	if len(edit.ModifiedParts) > 0 || len(edit.DeletedParts) > 0 || edit.AddedParts != nil {
+		t.Fatalf("Chatto processing a Matrix GIF changed it on Matrix: %+v", edit)
 	}
 }
 
