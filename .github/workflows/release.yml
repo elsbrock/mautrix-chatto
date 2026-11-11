@@ -1,0 +1,64 @@
+name: release
+
+# Publishes the container image for a version tag. The GitHub release itself,
+# with its notes, is written by hand (see CONTRIBUTING.md).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/elsbrock/mautrix-chatto
+
+jobs:
+  image:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    # Native runners: the bridge needs cgo for SQLite, so nothing is cross-built.
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
+      - name: Check the tag matches the version in the code
+        run: |
+          version="v$(nix eval --raw .#mautrix-chatto.version)"
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME, but nix/package.nix says $version"
+            exit 1
+          fi
+          # mautrix reports a tagged build as +dev unless this matches too.
+          if ! grep -q "Version: *\"${version#v}\"," cmd/mautrix-chatto/main.go; then
+            echo "::error::cmd/mautrix-chatto/main.go does not say ${version#v}"
+            exit 1
+          fi
+      - run: nix build .#docker
+      - name: Push
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          nix run --inputs-from . nixpkgs#skopeo -- copy \
+            --dest-creds "$GITHUB_ACTOR:$TOKEN" \
+            docker-archive:result "docker://$IMAGE:$GITHUB_REF_NAME-${{ matrix.arch }}"
+
+  manifest:
+    needs: image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Join both architectures under the version and latest
+        run: |
+          docker buildx imagetools create \
+            -t "$IMAGE:$GITHUB_REF_NAME" -t "$IMAGE:latest" \
+            "$IMAGE:$GITHUB_REF_NAME-amd64" "$IMAGE:$GITHUB_REF_NAME-arm64"

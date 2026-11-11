@@ -46,6 +46,12 @@
               ];
               WorkingDir = "/data";
               Volumes."/data" = { };
+              # The source label links the ghcr.io package to this repository.
+              Labels = {
+                "org.opencontainers.image.source" = "https://github.com/elsbrock/mautrix-chatto";
+                "org.opencontainers.image.version" = "v${mautrix-chatto.version}";
+                "org.opencontainers.image.revision" = rev;
+              };
               ExposedPorts = {
                 "29340/tcp" = { };
                 "8001/tcp" = { };

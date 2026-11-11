@@ -238,11 +238,11 @@ $EDITOR config.yaml                              <span class="c"># network.serve
 ./result/bin/mautrix-chatto -c config.yaml -r registration.yaml</code></pre>
 
 <h3>Container</h3>
-<pre><code>nix build github:elsbrock/mautrix-chatto#docker &amp;&amp; docker load &lt; result
-docker run --rm -v $PWD/data:/data mautrix-chatto -e -c /data/config.yaml
+<p>Images for amd64 and arm64 are published with every release.</p>
+<pre><code>docker run --rm -v $PWD/data:/data ghcr.io/elsbrock/mautrix-chatto -e -c /data/config.yaml
 <span class="c"># set appservice.hostname to 0.0.0.0 in data/config.yaml, then:</span>
-docker run --rm -v $PWD/data:/data mautrix-chatto -g -c /data/config.yaml -r /data/registration.yaml
-docker run -d -v $PWD/data:/data -p 29340:29340 mautrix-chatto</code></pre>
+docker run --rm -v $PWD/data:/data ghcr.io/elsbrock/mautrix-chatto -g -c /data/config.yaml -r /data/registration.yaml
+docker run -d -v $PWD/data:/data -p 29340:29340 ghcr.io/elsbrock/mautrix-chatto</code></pre>
 
 <h3 id="register">Connect it to your homeserver</h3>
 <p>The bridge runs next to your homeserver as an <em>appservice</em>. The homeserver

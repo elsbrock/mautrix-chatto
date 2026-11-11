@@ -185,13 +185,18 @@ The Chatto-specific part is the `network:` section.
 
 ## Container image
 
+Every release is published for amd64 and arm64 as `ghcr.io/elsbrock/mautrix-chatto`, tagged
+with its version (`:v0.1.1`) and `:latest`.
+
 ```sh
-nix build github:elsbrock/mautrix-chatto#docker && docker load < result
-docker run --rm -v $PWD/data:/data mautrix-chatto -e -c /data/config.yaml   # write a config
+docker run --rm -v $PWD/data:/data ghcr.io/elsbrock/mautrix-chatto -e -c /data/config.yaml   # write a config
 # edit data/config.yaml: set appservice.hostname to 0.0.0.0, then
-docker run --rm -v $PWD/data:/data mautrix-chatto -g -c /data/config.yaml -r /data/registration.yaml
-docker run -d -v $PWD/data:/data -p 29340:29340 mautrix-chatto
+docker run --rm -v $PWD/data:/data ghcr.io/elsbrock/mautrix-chatto -g -c /data/config.yaml -r /data/registration.yaml
+docker run -d -v $PWD/data:/data -p 29340:29340 ghcr.io/elsbrock/mautrix-chatto
 ```
+
+To build the image yourself: `nix build .#docker && docker load < result`,
+then use `mautrix-chatto` as the image name.
 
 ## Monitoring
 

@@ -64,6 +64,16 @@ Then:
 - If `go.mod` changed, update `vendorHash` in `nix/package.nix`
   (`nix build 2>&1 | grep got:`).
 
+## Releasing
+
+1. Set the new version, without the `v`, in `nix/package.nix` and in
+   `cmd/mautrix-chatto/main.go`.
+2. Tag the commit on `main` as `vX.Y.Z` and push the tag.
+3. The `release` workflow builds the image on amd64 and arm64 and pushes
+   `ghcr.io/elsbrock/mautrix-chatto:vX.Y.Z` and `:latest`. It fails if the tag
+   does not match the version in both files.
+4. Publish the GitHub release for the tag with notes.
+
 ## Regenerating other generated files
 
 ```sh
