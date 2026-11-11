@@ -24,8 +24,12 @@ Status: accepted (2026-10-25)
   exactly one Matrix event, and attachments that finish processing replace
   their own placeholder. Matrix captions (`body` ≠ `filename`) are sent as
   the Chatto message body.
-- **Reactions:** the emoji ID is Chatto's gemoji shortcode. Matrix keys are
-  normalised (VS16 removed, skin tone dropped, `:name:` accepted).
+- **Reactions:** the emoji ID is Chatto's reaction name, from Chatto's own
+  catalogue at the pinned release. A Matrix key maps to the name Chatto's
+  frontend sends for that emoji (`thumbsup`, not `+1`), so reactions from
+  both sides count together. Skin tones map to `::skin-tone-N` names; a tone
+  is dropped only when Chatto has no such variant. Keys are normalised (VS16
+  removed, `:name:` accepted).
 - **Threads:** Chatto threads map to `m.thread` on the root. A thread reply
   whose `in_reply_to` is the root is a plain thread message; other
   `in_reply_to` values become Matrix replies. Channel echoes of thread replies

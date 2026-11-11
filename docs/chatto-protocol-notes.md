@@ -47,7 +47,11 @@ describe the older 0.4 line and are partly out of date (e.g. realtime v1).
   DISABLED rejects threads and thread-targeting replies. DMs don't support threads.
 - `idempotency_key`: a UUID, per actor, with a 30 min window. An exact retry returns the same
   message; the same key with different args returns AlreadyExists.
-- Reactions use gemoji **shortcode names** (e.g. `+1`), never Unicode; max 20 distinct per user per message.
+- Reactions use **names**, never Unicode: gemoji shortcodes plus Slack-style skin tones
+  (`thumbsup`, `thumbsup::skin-tone-4`, `couple::skin-tone-2-6`). Adds must name an entry in
+  `cli/internal/core/emoji_gen.go` (INVALID_ARGUMENT otherwise); reads can carry unknown names.
+  The frontend sends `thumbsup`/`thumbsdown`, not `+1`/`-1`, and otherwise gemoji's first name.
+  Max 20 distinct per user per message.
 
 ## Rooms, users and media
 

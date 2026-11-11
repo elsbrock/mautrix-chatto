@@ -24,7 +24,7 @@ your Matrix homeserver:
 | Mentions | ✅ | ✅ | `@login` ↔ pills; `@all`/`@here` → `@room`. Uses Chatto's own mention rules |
 | Edits | ✅ | ✅ | Chatto authors can edit for 3 h |
 | Deletes | ✅ | ✅ | Deleting one attachment of a multi-attachment message removes just that attachment |
-| Reactions | ✅ | ✅ | Unicode ↔ gemoji shortcodes; skin tones are folded (Chatto has none). Custom emoji are rejected |
+| Reactions | ✅ | ✅ | Unicode ↔ Chatto's reaction names, skin tones included. Custom emoji are rejected |
 | Replies | ✅ | ✅ | |
 | Threads | ✅ | ✅ | Respects the room's threading mode; in rooms without threads a thread message becomes a reply |
 | Attachments | ✅ | ✅ | Chunked upload to Chatto; signed URLs downloaded; videos that are still processing are replaced when ready |

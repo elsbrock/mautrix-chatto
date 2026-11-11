@@ -194,20 +194,23 @@ func TestReactionsBothWays(t *testing.T) {
 	msg := w.srv.PostMessage(w.bob.ID, w.room.ID, "react to me")
 	orig := w.waitMessage(portal.MXID, "react to me")
 
-	w.srv.React(w.bob.ID, msg.ID, "tada")
-	w.eventually("reaction on matrix", func() bool {
-		return len(w.mx.Events(func(e *sentEvent) bool {
-			r := e.Reaction()
-			return e.Type == event.EventReaction && r != nil && r.RelatesTo.Key == "🎉" && r.RelatesTo.EventID == orig.ID
-		})) == 1
-	})
+	for name, key := range map[string]string{"tada": "🎉", "wave::skin-tone-6": "👋🏿"} {
+		w.srv.React(w.bob.ID, msg.ID, name)
+		w.eventually("reaction "+name+" on matrix", func() bool {
+			return len(w.mx.Events(func(e *sentEvent) bool {
+				r := e.Reaction()
+				return e.Type == event.EventReaction && r != nil && r.RelatesTo.Key == key && r.RelatesTo.EventID == orig.ID
+			})) == 1
+		})
+	}
 
 	w.sendMatrix(portal.MXID, aliceMXID, event.EventReaction, &event.ReactionEventContent{
 		RelatesTo: event.RelatesTo{Type: event.RelAnnotation, EventID: orig.ID, Key: "👍🏽"},
 	})
 	w.eventually("reaction on chatto", func() bool {
 		m := w.srv.Message(msg.ID)
-		return len(m.Reactions["+1"]) == 1 && m.Reactions["+1"][0] == w.alice.ID
+		r := m.Reactions["thumbsup::skin-tone-4"]
+		return len(r) == 1 && r[0] == w.alice.ID
 	})
 }
 

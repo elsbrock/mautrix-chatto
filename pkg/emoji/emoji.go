@@ -1,5 +1,6 @@
 // Package emoji maps between Unicode emoji, which Matrix uses as reaction
-// keys, and the gemoji shortcode names that Chatto's reaction API accepts.
+// keys, and the reaction names that Chatto's API accepts, such as "thumbsup"
+// or "thumbsup::skin-tone-4".
 package emoji
 
 import (
@@ -14,12 +15,12 @@ type entry struct {
 }
 
 var (
-	nameToUnicode = make(map[string]string, 2048)
-	unicodeToName = make(map[string]string, 2048)
+	nameToUnicode = make(map[string]string, 4096)
+	unicodeToName = make(map[string]string, 4096)
 )
 
 func init() {
-	for _, e := range gemojiTable {
+	for _, e := range catalogue {
 		key := normalize(e.unicode)
 		if _, exists := unicodeToName[key]; !exists {
 			unicodeToName[key] = e.names[0]
@@ -55,10 +56,11 @@ func stripSkinTones(s string) string {
 	}, s)
 }
 
-// ToShortcode returns the Chatto reaction name for a Unicode emoji. Skin tone
-// modifiers are dropped when no exact entry exists, because Chatto's dataset
-// has no skin tone variants. The second return value is false when the emoji
-// cannot be represented on Chatto at all.
+// ToShortcode returns the Chatto reaction name for a Unicode emoji: the name
+// Chatto's own frontend sends, so reactions from both sides count together.
+// Skin tones are dropped only when Chatto has no variant of the emoji with
+// that tone. The second return value is false when the emoji cannot be
+// represented on Chatto at all.
 func ToShortcode(unicode string) (string, bool) {
 	unicode = strings.TrimSpace(unicode)
 	if name, ok := unicodeToName[normalize(unicode)]; ok {
@@ -67,11 +69,12 @@ func ToShortcode(unicode string) (string, bool) {
 	if name, ok := unicodeToName[normalize(stripSkinTones(unicode))]; ok {
 		return name, true
 	}
-	// Some clients send ":shortcode:" as the reaction key.
+	// Some clients send ":shortcode:" as the reaction key. Aliases such as
+	// "+1" map to the name Chatto's frontend uses, so they count together.
 	if trimmed, ok := strings.CutPrefix(unicode, ":"); ok {
 		if trimmed, ok = strings.CutSuffix(trimmed, ":"); ok {
-			if _, known := nameToUnicode[trimmed]; known {
-				return trimmed, true
+			if emoji, known := nameToUnicode[trimmed]; known {
+				return unicodeToName[normalize(emoji)], true
 			}
 		}
 	}

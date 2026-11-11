@@ -30,4 +30,5 @@ cp "$tmp/chatto/testdata/mentions/extraction.json" pkg/chattofmt/testdata/mentio
 
 rm -rf pkg/chattopb
 buf generate
+node tools/gen-emoji.mjs
 echo "Done. Review the diff, run the tests, and update docs/chatto-protocol-notes.md if behaviour changed."
